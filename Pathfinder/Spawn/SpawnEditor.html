@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pathfinder Spawn Editor</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1020;
+      --panel: #121a2e;
+      --panel-2: #18233b;
+      --line: #2a3855;
+      --text: #edf3ff;
+      --muted: #9eb0cc;
+      --accent: #64d7b0;
+      --accent-2: #7fa8ff;
+      --danger: #ff7885;
+      --warning: #ffc66d;
+      --shadow: 0 18px 55px rgba(0, 0, 0, .28);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 15% 0%, rgba(91, 135, 255, .18), transparent 32rem),
+        radial-gradient(circle at 90% 8%, rgba(75, 220, 175, .12), transparent 30rem),
+        var(--bg);
+      color: var(--text);
+      font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button, input, select { font: inherit; }
+    button, input, select {
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #0e1628;
+      color: var(--text);
+    }
+    button {
+      padding: 9px 13px;
+      cursor: pointer;
+      font-weight: 700;
+      transition: transform .12s ease, border-color .12s ease, background .12s ease;
+    }
+    button:hover:not(:disabled) { transform: translateY(-1px); border-color: var(--accent-2); }
+    button:disabled { cursor: not-allowed; opacity: .42; }
+    input, select { width: 100%; padding: 9px 10px; outline: none; }
+    input:focus, select:focus { border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(127, 168, 255, .12); }
+    input[type="checkbox"] { width: auto; accent-color: var(--accent); }
+
+    .shell { width: min(1480px, calc(100% - 28px)); margin: 0 auto; padding: 28px 0 44px; }
+    header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
+    h1 { margin: 0 0 5px; font-size: clamp(24px, 3vw, 38px); letter-spacing: -.04em; }
+    h2 { margin: 0; font-size: 17px; }
+    .subtitle, .muted { color: var(--muted); }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: max-content;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(18, 26, 46, .88);
+      color: var(--muted);
+    }
+    .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #6d7890; }
+    .status.ready::before { background: var(--accent); box-shadow: 0 0 14px var(--accent); }
+    .status.dirty::before { background: var(--warning); box-shadow: 0 0 14px var(--warning); }
+
+    .card {
+      background: linear-gradient(180deg, rgba(24, 35, 59, .96), rgba(18, 26, 46, .96));
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+    }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; padding: 14px; margin-bottom: 14px; }
+    .toolbar .spacer { flex: 1; }
+    .primary { background: linear-gradient(135deg, #296b61, #1e594f); border-color: #3e8e7f; }
+    .secondary { background: #172744; }
+    .danger { background: #46202a; border-color: #7a3341; color: #ffdce0; }
+    .ghost { background: transparent; }
+
+    .note { padding: 12px 14px; margin-bottom: 14px; border-left: 4px solid var(--accent-2); }
+    .note strong { color: #cfe0ff; }
+
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+    .stat { padding: 13px 15px; }
+    .stat b { display: block; font-size: 22px; letter-spacing: -.03em; }
+    .stat span { color: var(--muted); font-size: 12px; }
+
+    .workspace { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(330px, .8fr); gap: 14px; align-items: start; }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 16px; border-bottom: 1px solid var(--line); }
+    .panel-body { padding: 14px; }
+
+    .filters { display: grid; grid-template-columns: 1fr 1fr 150px auto; gap: 9px; margin-bottom: 12px; }
+    .table-wrap { overflow: auto; max-height: 570px; border: 1px solid var(--line); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+    th, td { padding: 9px 10px; border-bottom: 1px solid #23314c; text-align: left; }
+    th { position: sticky; top: 0; z-index: 2; background: #17223a; color: #bfd0e9; font-size: 12px; }
+    tbody tr { cursor: pointer; }
+    tbody tr:hover { background: rgba(127, 168, 255, .08); }
+    tbody tr.selected { background: rgba(100, 215, 176, .13); outline: 1px solid rgba(100, 215, 176, .55); outline-offset: -1px; }
+    td.empty { padding: 42px 16px; text-align: center; color: var(--muted); }
+    .badge { display: inline-block; padding: 2px 7px; border-radius: 999px; background: #243452; color: #c9d7ee; font-size: 11px; font-weight: 700; }
+    .badge.surf { background: #173e59; color: #b9e9ff; }
+    .pager { display: flex; align-items: center; justify-content: flex-end; gap: 9px; padding-top: 11px; color: var(--muted); }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    label { display: grid; gap: 5px; color: #becbe0; font-size: 12px; font-weight: 700; }
+    label.wide { grid-column: 1 / -1; }
+    .checks { display: flex; flex-wrap: wrap; gap: 14px; padding: 8px 0; }
+    .checks label { display: flex; align-items: center; gap: 7px; font-weight: 600; }
+    .form-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; padding-top: 14px; border-top: 1px solid var(--line); }
+    .error { min-height: 20px; margin-top: 9px; color: #ffadb5; }
+    .hidden { display: none !important; }
+
+    dialog { width: min(520px, calc(100% - 28px)); border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
+    dialog::backdrop { background: rgba(3, 7, 16, .72); }
+    dialog .form-actions { justify-content: flex-end; }
+    code { color: #b8e6d7; }
+
+    @media (max-width: 980px) {
+      .workspace { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 650px) {
+      header { flex-direction: column; }
+      .filters, .form-grid { grid-template-columns: 1fr; }
+      label.wide { grid-column: auto; }
+      .stats { grid-template-columns: 1fr 1fr; }
+      .toolbar .spacer { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <h1>Pathfinder Spawn Editor</h1>
+        <div class="subtitle">Search, add, edit, or remove spawn records and rebuild <code>SpawnData.lua</code>.</div>
+      </div>
+      <div id="status" class="status">No files loaded</div>
+    </header>
+
+    <section class="card toolbar">
+      <button id="openFolder" class="primary">Open Spawn folder</button>
+      <button id="openFiles" class="secondary">Open JSON files</button>
+      <input id="filePicker" class="hidden" type="file" accept=".json,application/json" multiple>
+      <span class="spacer"></span>
+      <button id="download" disabled>Download generated files</button>
+      <button id="save" class="primary" disabled>Save + rebuild Lua</button>
+    </section>
+
+    <section class="card note">
+      <strong>Safe workflow:</strong> load <code>LandSpawn.json</code> and <code>SurfSpawn.json</code>. The editor updates those source files and regenerates <code>SpawnData.lua</code>; it never edits PROShine code.
+    </section>
+
+    <section class="stats">
+      <div class="card stat"><b id="totalCount">0</b><span>Total spawn rows</span></div>
+      <div class="card stat"><b id="landCount">0</b><span>Land rows</span></div>
+      <div class="card stat"><b id="surfCount">0</b><span>Surf rows</span></div>
+      <div class="card stat"><b id="pokemonCount">0</b><span>Unique Pokémon</span></div>
+    </section>
+
+    <section class="workspace">
+      <div class="card">
+        <div class="panel-head">
+          <h2>Spawn records</h2>
+          <span id="matchCount" class="muted">0 matches</span>
+        </div>
+        <div class="panel-body">
+          <div class="filters">
+            <input id="filterPokemon" type="search" placeholder="Pokémon name (e.g. Cacnea)">
+            <input id="filterMap" type="search" placeholder="Map (e.g. Route 228)">
+            <select id="filterType">
+              <option value="">Land + Surf</option>
+              <option value="Land">Land only</option>
+              <option value="Surf">Surf only</option>
+            </select>
+            <button id="clearFilters" class="ghost">Clear</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Type</th><th>Pokémon</th><th>Map</th><th>Levels</th><th>Time</th><th>Tier</th><th>Member</th></tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+          <div class="pager">
+            <button id="prevPage">Previous</button>
+            <span id="pageText">Page 1 / 1</span>
+            <button id="nextPage">Next</button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="card">
+        <div class="panel-head">
+          <h2 id="formTitle">Add spawn</h2>
+          <button id="newRecord" class="ghost">New</button>
+        </div>
+        <form id="recordForm" class="panel-body">
+          <div class="form-grid">
+            <label class="wide">Pokémon
+              <input id="pokemon" required placeholder="Cacnea">
+            </label>
+            <label class="wide">Map
+              <input id="map" required placeholder="Route 228">
+            </label>
+            <label>Type
+              <select id="mapType"><option>Land</option><option>Surf</option></select>
+            </label>
+            <label>Monster ID
+              <input id="monsterId" type="number" min="1" step="1" required>
+            </label>
+            <label>Minimum level
+              <input id="minLevel" type="number" min="0" step="1" required>
+            </label>
+            <label>Maximum level
+              <input id="maxLevel" type="number" min="0" step="1" required>
+            </label>
+            <label>Tier
+              <select id="tier"><option>Common</option><option>Uncommon</option><option>Rare</option></select>
+            </label>
+            <label>Held item
+              <input id="item" placeholder="Leave blank for none">
+            </label>
+            <label class="wide">Available time
+              <span class="checks">
+                <label><input id="morning" type="checkbox" checked> Morning</label>
+                <label><input id="day" type="checkbox" checked> Day</label>
+                <label><input id="night" type="checkbox" checked> Night</label>
+                <label><input id="memberOnly" type="checkbox"> Member only</label>
+              </span>
+            </label>
+            <label id="fishingOnlyWrap">Fishing only
+              <select id="fishingOnly"><option value="0">No</option><option value="1">Yes</option></select>
+            </label>
+            <label id="requiredRodWrap">Required rod
+              <select id="requiredRod"><option value="">None</option><option>Old Rod</option><option>Good Rod</option><option>Super Rod</option></select>
+            </label>
+          </div>
+          <div id="formError" class="error"></div>
+          <div class="form-actions">
+            <button id="submitRecord" type="submit" class="primary" disabled>Add spawn</button>
+            <button id="duplicateRecord" type="button" disabled>Duplicate</button>
+            <button id="deleteRecord" type="button" class="danger" disabled>Delete</button>
+          </div>
+        </form>
+      </aside>
+    </section>
+  </main>
+
+  <dialog id="messageDialog">
+    <h2 id="dialogTitle">Message</h2>
+    <p id="dialogMessage" class="muted"></p>
+    <div class="form-actions"><button id="dialogClose" class="primary">OK</button></div>
+  </dialog>
+
+  <script>
+    "use strict";
+
+    const PAGE_SIZE = 150;
+    const state = {
+      Land: [],
+      Surf: [],
+      directory: null,
+      loaded: false,
+      dirty: false,
+      editing: null,
+      page: 1,
+      backupsWritten: false
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const fields = {
+      pokemon: $("pokemon"), map: $("map"), mapType: $("mapType"), monsterId: $("monsterId"),
+      minLevel: $("minLevel"), maxLevel: $("maxLevel"), tier: $("tier"), item: $("item"),
+      morning: $("morning"), day: $("day"), night: $("night"), memberOnly: $("memberOnly"),
+      fishingOnly: $("fishingOnly"), requiredRod: $("requiredRod")
+    };
+
+    function setStatus(text, mode = "") {
+      $("status").textContent = text;
+      $("status").className = "status" + (mode ? " " + mode : "");
+    }
+
+    function showMessage(title, message) {
+      $("dialogTitle").textContent = title;
+      $("dialogMessage").textContent = message;
+      if ($("messageDialog").showModal) $("messageDialog").showModal();
+      else alert(title + "\n\n" + message);
+    }
+
+    function normalizedText(value) { return String(value == null ? "" : value).trim(); }
+    function intValue(value) { const n = Number.parseInt(value, 10); return Number.isFinite(n) ? n : 0; }
+    function compareText(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
+    function uniqueSorted(values) { return [...new Set(values)].sort(compareText); }
+
+    function stableObject(value) {
+      if (Array.isArray(value)) return value.map(stableObject);
+      if (value && typeof value === "object") {
+        const result = {};
+        Object.keys(value).sort(compareText).forEach((key) => { result[key] = stableObject(value[key]); });
+        return result;
+      }
+      return value;
+    }
+
+    function deduplicate(rows) {
+      const seen = new Set();
+      return rows.filter((row) => {
+        const key = JSON.stringify(stableObject(row));
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+
+    function normalizeRuntimeRow(row, mapType) {
+      const time = Array.isArray(row.Daytime) ? row.Daytime : [0, 0, 0];
+      return {
+        Pokemon: normalizedText(row.Pokemon),
+        Map: normalizedText(row.Map),
+        Morning: time[0] ? 1 : 0,
+        Day: time[1] ? 1 : 0,
+        Night: time[2] ? 1 : 0,
+        MinLVL: intValue(row.MinLVL),
+        MaxLVL: intValue(row.MaxLVL),
+        Item: normalizedText(row.Item),
+        Tier: normalizedText(row.Tier),
+        MemberOnly: Boolean(row.MemberOnly),
+        MapType: mapType,
+        FishingOnly: intValue(row.FishingOnly),
+        RequiredRod: normalizedText(row.RequiredRod)
+      };
+    }
+
+    function buildRuntimeRows() {
+      const grouped = new Map();
+      const seen = new Set();
+      for (const mapType of ["Land", "Surf"]) {
+        for (const sourceRow of deduplicate(state[mapType])) {
+          const row = normalizeRuntimeRow(sourceRow, mapType);
+          if (!row.Pokemon || !row.Map) continue;
+          const key = [row.Pokemon, row.Map, row.Morning, row.Day, row.Night, row.MinLVL, row.MaxLVL,
+            row.Item, row.Tier, row.MemberOnly, row.MapType, row.FishingOnly, row.RequiredRod].join("\u001f");
+          if (seen.has(key)) continue;
+          seen.add(key);
+          if (!grouped.has(row.Pokemon)) grouped.set(row.Pokemon, []);
+          grouped.get(row.Pokemon).push(row);
+        }
+      }
+      return new Map([...grouped.entries()].sort((a, b) => compareText(a[0], b[0])));
+    }
+
+    function luaString(value) { return JSON.stringify(String(value)); }
+
+    function luaArray(name, values) {
+      return "local " + name + " = {\n" + values.map((v) => "    " + luaString(v) + ",").join("\n") + "\n}\n\n";
+    }
+
+    function generateSpawnData() {
+      const grouped = buildRuntimeRows();
+      const allRows = [...grouped.values()].flat();
+      const maps = uniqueSorted(allRows.map((r) => r.Map));
+      const items = uniqueSorted(allRows.map((r) => r.Item));
+      const tiers = uniqueSorted(allRows.map((r) => r.Tier));
+      const mapTypes = uniqueSorted(allRows.map((r) => r.MapType));
+      const rods = uniqueSorted(allRows.map((r) => r.RequiredRod));
+      const indexOf = (array) => new Map(array.map((value, index) => [value, index + 1]));
+      const indexes = { Map: indexOf(maps), Item: indexOf(items), Tier: indexOf(tiers), MapType: indexOf(mapTypes), RequiredRod: indexOf(rods) };
+
+      let output = "-- Generated by SpawnEditor.html. Do not edit by hand.\n";
+      output += "-- Packed rows are decoded lazily for the requested Pokemon only.\n\n";
+      output += luaArray("Maps", maps) + luaArray("Items", items) + luaArray("Tiers", tiers) + luaArray("MapTypes", mapTypes) + luaArray("RequiredRods", rods);
+      output += "local PackedSpawnData = {\n";
+      for (const [pokemon, rows] of grouped) {
+        const packed = rows.map((row) => {
+          const timeMask = row.Morning + row.Day * 2 + row.Night * 4;
+          return [indexes.Map.get(row.Map), timeMask, row.MinLVL, row.MaxLVL, indexes.Item.get(row.Item),
+            indexes.Tier.get(row.Tier), row.MemberOnly ? 1 : 0, indexes.MapType.get(row.MapType),
+            row.FishingOnly, indexes.RequiredRod.get(row.RequiredRod)].join(",");
+        }).join(";");
+        output += "    [" + luaString(pokemon) + "] = " + luaString(packed) + ",\n";
+      }
+      output += `}
+
+local SpawnData = {}
+
+local function decodePokemon(pokemonName)
+    local packed = PackedSpawnData[pokemonName]
+    if packed == nil then
+        return nil
+    end
+
+    local rows = {}
+    for encodedRow in string.gmatch(packed, "[^;]+") do
+        local values = {}
+        for encodedValue in string.gmatch(encodedRow, "[^,]+") do
+            values[#values + 1] = tonumber(encodedValue)
+        end
+
+        local timeMask = values[2]
+        rows[#rows + 1] = {
+            Map = Maps[values[1]],
+            Morning = timeMask % 2,
+            Day = math.floor(timeMask / 2) % 2,
+            Night = math.floor(timeMask / 4) % 2,
+            MinLVL = values[3],
+            MaxLVL = values[4],
+            Item = Items[values[5]],
+            Tier = Tiers[values[6]],
+            MemberOnly = values[7] == 1,
+            MapType = MapTypes[values[8]],
+            FishingOnly = values[9],
+            RequiredRod = RequiredRods[values[10]],
+        }
+    end
+
+    PackedSpawnData[pokemonName] = nil
+    rawset(SpawnData, pokemonName, rows)
+    return rows
+end
+
+setmetatable(SpawnData, {
+    __index = function(_, pokemonName)
+        return decodePokemon(pokemonName)
+    end,
+    __pairs = function()
+        local names = {}
+        for pokemonName in pairs(PackedSpawnData) do
+            names[#names + 1] = pokemonName
+        end
+        for _, pokemonName in ipairs(names) do
+            decodePokemon(pokemonName)
+        end
+        return next, SpawnData, nil
+    end,
+})
+
+return SpawnData
+`;
+      return output;
+    }
+
+    async function readJsonFile(file) {
+      const text = (await file.text()).replace(/^\uFEFF/, "");
+      const data = JSON.parse(text);
+      if (!Array.isArray(data)) throw new Error(file.name + " must contain a JSON array.");
+      return data;
+    }
+
+    async function loadFromDirectory() {
+      if (!window.showDirectoryPicker) {
+        showMessage("Folder access unavailable", "Use Open JSON files instead. Chrome or Edge supports direct folder saving.");
+        return;
+      }
+      try {
+        const directory = await window.showDirectoryPicker({ mode: "readwrite" });
+        const landHandle = await directory.getFileHandle("LandSpawn.json");
+        const surfHandle = await directory.getFileHandle("SurfSpawn.json");
+        const [land, surf] = await Promise.all([readJsonFile(await landHandle.getFile()), readJsonFile(await surfHandle.getFile())]);
+        state.Land = land;
+        state.Surf = surf;
+        state.directory = directory;
+        finishLoad("Loaded " + directory.name);
+      } catch (error) {
+        if (error.name !== "AbortError") showMessage("Could not open folder", error.message);
+      }
+    }
+
+    async function loadFromFiles(files) {
+      try {
+        const byName = new Map([...files].map((file) => [file.name.toLowerCase(), file]));
+        const landFile = byName.get("landspawn.json");
+        const surfFile = byName.get("surfspawn.json");
+        if (!landFile || !surfFile) throw new Error("Select both LandSpawn.json and SurfSpawn.json.");
+        const [land, surf] = await Promise.all([readJsonFile(landFile), readJsonFile(surfFile)]);
+        state.Land = land;
+        state.Surf = surf;
+        state.directory = null;
+        finishLoad("Loaded JSON files");
+      } catch (error) {
+        showMessage("Could not load files", error.message);
+      }
+    }
+
+    function finishLoad(message) {
+      state.loaded = true;
+      state.dirty = false;
+      state.backupsWritten = false;
+      state.page = 1;
+      clearEditor();
+      $("save").disabled = false;
+      $("download").disabled = false;
+      $("submitRecord").disabled = false;
+      setStatus(message, "ready");
+      render();
+    }
+
+    function markDirty() {
+      state.dirty = true;
+      setStatus("Unsaved changes", "dirty");
+      renderStats();
+    }
+
+    function filteredRows() {
+      const pokemon = $("filterPokemon").value.trim().toLowerCase();
+      const map = $("filterMap").value.trim().toLowerCase();
+      const type = $("filterType").value;
+      const result = [];
+      for (const mapType of ["Land", "Surf"]) {
+        if (type && type !== mapType) continue;
+        state[mapType].forEach((row, index) => {
+          if (pokemon && !normalizedText(row.Pokemon).toLowerCase().includes(pokemon)) return;
+          if (map && !normalizedText(row.Map).toLowerCase().includes(map)) return;
+          result.push({ mapType, index, row });
+        });
+      }
+      return result;
+    }
+
+    function timeLabel(daytime) {
+      const time = Array.isArray(daytime) ? daytime : [];
+      const labels = [];
+      if (time[0]) labels.push("M");
+      if (time[1]) labels.push("D");
+      if (time[2]) labels.push("N");
+      return labels.join("/") || "—";
+    }
+
+    function render() {
+      renderStats();
+      const matches = filteredRows();
+      const pages = Math.max(1, Math.ceil(matches.length / PAGE_SIZE));
+      state.page = Math.min(state.page, pages);
+      const start = (state.page - 1) * PAGE_SIZE;
+      const visible = matches.slice(start, start + PAGE_SIZE);
+      $("matchCount").textContent = matches.length.toLocaleString() + " matches";
+      $("pageText").textContent = "Page " + state.page + " / " + pages;
+      $("prevPage").disabled = state.page <= 1;
+      $("nextPage").disabled = state.page >= pages;
+      const tbody = $("rows");
+      tbody.textContent = "";
+      if (!visible.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = '<td class="empty" colspan="7">' + (state.loaded ? "No matching spawn records." : "Open the Spawn folder or select both JSON files.") + "</td>";
+        tbody.appendChild(tr);
+        return;
+      }
+      for (const ref of visible) {
+        const tr = document.createElement("tr");
+        if (state.editing && state.editing.mapType === ref.mapType && state.editing.index === ref.index) tr.classList.add("selected");
+        const cells = [
+          '<span class="badge ' + (ref.mapType === "Surf" ? "surf" : "") + '">' + ref.mapType + "</span>",
+          escapeHtml(ref.row.Pokemon), escapeHtml(ref.row.Map),
+          intValue(ref.row.MinLVL) + "–" + intValue(ref.row.MaxLVL), timeLabel(ref.row.Daytime),
+          escapeHtml(ref.row.Tier), ref.row.MemberOnly ? "Yes" : "No"
+        ];
+        cells.forEach((html) => { const td = document.createElement("td"); td.innerHTML = html; tr.appendChild(td); });
+        tr.addEventListener("click", () => editRecord(ref.mapType, ref.index));
+        tbody.appendChild(tr);
+      }
+    }
+
+    function renderStats() {
+      const all = [...state.Land, ...state.Surf];
+      $("totalCount").textContent = all.length.toLocaleString();
+      $("landCount").textContent = state.Land.length.toLocaleString();
+      $("surfCount").textContent = state.Surf.length.toLocaleString();
+      $("pokemonCount").textContent = new Set(all.map((r) => normalizedText(r.Pokemon)).filter(Boolean)).size.toLocaleString();
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? "" : value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+    }
+
+    function clearEditor() {
+      state.editing = null;
+      $("recordForm").reset();
+      fields.mapType.value = "Land";
+      fields.tier.value = "Common";
+      fields.morning.checked = fields.day.checked = fields.night.checked = true;
+      fields.fishingOnly.value = "0";
+      $("formTitle").textContent = "Add spawn";
+      $("submitRecord").textContent = "Add spawn";
+      $("deleteRecord").disabled = true;
+      $("duplicateRecord").disabled = true;
+      $("formError").textContent = "";
+      updateSurfFields();
+      render();
+    }
+
+    function editRecord(mapType, index) {
+      const row = state[mapType][index];
+      if (!row) return;
+      state.editing = { mapType, index };
+      fields.pokemon.value = normalizedText(row.Pokemon);
+      fields.map.value = normalizedText(row.Map);
+      fields.mapType.value = mapType;
+      fields.monsterId.value = intValue(row.MonsterID);
+      fields.minLevel.value = intValue(row.MinLVL);
+      fields.maxLevel.value = intValue(row.MaxLVL);
+      fields.tier.value = normalizedText(row.Tier) || "Common";
+      fields.item.value = normalizedText(row.Item);
+      const time = Array.isArray(row.Daytime) ? row.Daytime : [0, 0, 0];
+      fields.morning.checked = Boolean(time[0]);
+      fields.day.checked = Boolean(time[1]);
+      fields.night.checked = Boolean(time[2]);
+      fields.memberOnly.checked = Boolean(row.MemberOnly);
+      fields.fishingOnly.value = String(intValue(row.FishingOnly));
+      fields.requiredRod.value = normalizedText(row.RequiredRod);
+      $("formTitle").textContent = "Edit spawn";
+      $("submitRecord").textContent = "Update spawn";
+      $("deleteRecord").disabled = false;
+      $("duplicateRecord").disabled = false;
+      $("formError").textContent = "";
+      updateSurfFields();
+      render();
+    }
+
+    function recordFromForm(existing = {}) {
+      const mapType = fields.mapType.value;
+      const min = intValue(fields.minLevel.value);
+      const max = intValue(fields.maxLevel.value);
+      if (!normalizedText(fields.pokemon.value) || !normalizedText(fields.map.value)) throw new Error("Pokémon and Map are required.");
+      if (!intValue(fields.monsterId.value)) throw new Error("Monster ID must be greater than zero.");
+      if (max < min) throw new Error("Maximum level cannot be lower than minimum level.");
+      if (!fields.morning.checked && !fields.day.checked && !fields.night.checked) throw new Error("Select at least one available time.");
+      const row = {
+        ...existing,
+        Map: normalizedText(fields.map.value),
+        Pokemon: normalizedText(fields.pokemon.value),
+        MonsterID: intValue(fields.monsterId.value),
+        Daytime: [fields.morning.checked ? 1 : 0, fields.day.checked ? 1 : 0, fields.night.checked ? 1 : 0],
+        MinLVL: min,
+        MaxLVL: max,
+        Item: normalizedText(fields.item.value) || null,
+        MemberOnly: fields.memberOnly.checked,
+        Tier: fields.tier.value
+      };
+      if (mapType === "Surf") {
+        row.Fishing = Object.prototype.hasOwnProperty.call(existing, "Fishing") ? intValue(existing.Fishing) : 1;
+        row.FishingOnly = intValue(fields.fishingOnly.value);
+        row.RequiredRod = fields.requiredRod.value;
+      } else {
+        delete row.Fishing;
+        delete row.FishingOnly;
+        delete row.RequiredRod;
+      }
+      return { mapType, row };
+    }
+
+    function submitRecord(event) {
+      event.preventDefault();
+      if (!state.loaded) return;
+      try {
+        const current = state.editing ? state[state.editing.mapType][state.editing.index] : {};
+        const result = recordFromForm(current);
+        if (state.editing) {
+          state[state.editing.mapType].splice(state.editing.index, 1);
+          state[result.mapType].push(result.row);
+        } else {
+          state[result.mapType].push(result.row);
+        }
+        markDirty();
+        clearEditor();
+      } catch (error) {
+        $("formError").textContent = error.message;
+      }
+    }
+
+    function deleteRecord() {
+      if (!state.editing) return;
+      const row = state[state.editing.mapType][state.editing.index];
+      if (!confirm("Delete " + row.Pokemon + " from " + row.Map + "?")) return;
+      state[state.editing.mapType].splice(state.editing.index, 1);
+      markDirty();
+      clearEditor();
+    }
+
+    function duplicateRecord() {
+      if (!state.editing) return;
+      state.editing = null;
+      $("formTitle").textContent = "Duplicate spawn";
+      $("submitRecord").textContent = "Add copy";
+      $("deleteRecord").disabled = true;
+      $("duplicateRecord").disabled = true;
+      render();
+    }
+
+    function updateSurfFields() {
+      const isSurf = fields.mapType.value === "Surf";
+      $("fishingOnlyWrap").classList.toggle("hidden", !isSurf);
+      $("requiredRodWrap").classList.toggle("hidden", !isSurf);
+    }
+
+    function jsonText(rows) { return JSON.stringify(deduplicate(rows)) + "\n"; }
+
+    async function writeFile(name, content) {
+      const handle = await state.directory.getFileHandle(name, { create: true });
+      const writable = await handle.createWritable();
+      await writable.write(content);
+      await writable.close();
+    }
+
+    async function existingText(name) {
+      try { return await (await (await state.directory.getFileHandle(name)).getFile()).text(); }
+      catch (_) { return null; }
+    }
+
+    async function saveAll() {
+      if (!state.directory) {
+        downloadAll();
+        showMessage("Files downloaded", "Replace LandSpawn.json, SurfSpawn.json, and SpawnData.lua in the Spawn folder with the downloaded files.");
+        return;
+      }
+      try {
+        const landText = jsonText(state.Land);
+        const surfText = jsonText(state.Surf);
+        const luaText = generateSpawnData();
+        if (!state.backupsWritten) {
+          const originals = await Promise.all([existingText("LandSpawn.json"), existingText("SurfSpawn.json"), existingText("SpawnData.lua")]);
+          if (originals[0] != null) await writeFile("LandSpawn.backup.json", originals[0]);
+          if (originals[1] != null) await writeFile("SurfSpawn.backup.json", originals[1]);
+          if (originals[2] != null) await writeFile("SpawnData.backup.lua", originals[2]);
+          state.backupsWritten = true;
+        }
+        await writeFile("LandSpawn.json", landText);
+        await writeFile("SurfSpawn.json", surfText);
+        await writeFile("SpawnData.lua", luaText);
+        state.Land = deduplicate(state.Land);
+        state.Surf = deduplicate(state.Surf);
+        state.dirty = false;
+        setStatus("Saved and rebuilt SpawnData.lua", "ready");
+        render();
+        showMessage("Saved", "JSON source files and SpawnData.lua were updated. Backup files were created before the first save in this session.");
+      } catch (error) {
+        showMessage("Save failed", error.message);
+      }
+    }
+
+    function downloadFile(name, content, type) {
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([content], { type }));
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }
+
+    function downloadAll() {
+      if (!state.loaded) return;
+      downloadFile("LandSpawn.json", jsonText(state.Land), "application/json");
+      setTimeout(() => downloadFile("SurfSpawn.json", jsonText(state.Surf), "application/json"), 150);
+      setTimeout(() => downloadFile("SpawnData.lua", generateSpawnData(), "text/plain"), 300);
+    }
+
+    $("openFolder").addEventListener("click", loadFromDirectory);
+    $("openFiles").addEventListener("click", () => $("filePicker").click());
+    $("filePicker").addEventListener("change", (event) => loadFromFiles(event.target.files));
+    $("save").addEventListener("click", saveAll);
+    $("download").addEventListener("click", downloadAll);
+    $("recordForm").addEventListener("submit", submitRecord);
+    $("deleteRecord").addEventListener("click", deleteRecord);
+    $("duplicateRecord").addEventListener("click", duplicateRecord);
+    $("newRecord").addEventListener("click", clearEditor);
+    fields.mapType.addEventListener("change", updateSurfFields);
+    $("dialogClose").addEventListener("click", () => $("messageDialog").close());
+    $("clearFilters").addEventListener("click", () => {
+      $("filterPokemon").value = $("filterMap").value = "";
+      $("filterType").value = "";
+      state.page = 1;
+      render();
+    });
+    [$("filterPokemon"), $("filterMap"), $("filterType")].forEach((element) => element.addEventListener("input", () => { state.page = 1; render(); }));
+    $("prevPage").addEventListener("click", () => { state.page--; render(); });
+    $("nextPage").addEventListener("click", () => { state.page++; render(); });
+    window.addEventListener("beforeunload", (event) => { if (state.dirty) { event.preventDefault(); event.returnValue = ""; } });
+
+    updateSurfFields();
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+local cdpath = ""
+local cpath = select(1, ...) -- callee path
+if cpath ~= nil then
+	cdpath = cpath:match(".+[/%.]") or cdpath -- callee dir path
+end
+
+local PathFinder    = require (cdpath .. "Lib/MoveTo/MoveTo")
+local DialogSolver  = require (cdpath .. "Lib/MoveTo/DialogSolver")
+local moveToMapCell = require (cdpath .. "Lib/MoveTo/MoveToMapCell")
+local Pokecenter    = require (cdpath .. "Lib/MoveTo/Pokecenter")
+local Pokemart      = require (cdpath .. "Lib/MoveTo/Pokemart")
+local PokemonEV     = require (cdpath .. "Lib/Pokemon/PokemonEV")
+local MapSpawn      = require (cdpath .. "Lib/Pokemon/MapSpawn")
+local MapPath       = require (cdpath .. "Lib/MoveTo/MapPath")
+
+return {
+	getPath = PathFinder.getPath,
+	moveTo = PathFinder.moveTo,
+	getMapNode = PathFinder.getMapNode,
+	isSameMap = PathFinder.isSameMap,
+	isDestination = PathFinder.isDestination,
+	moveToMapCell = moveToMapCell.moveToMapCell,
+	useNearestPokemart = Pokemart.useNearestPokemart,
+	moveToPC = Pokecenter.moveToPC,
+	useNearestPokecenter = Pokecenter.useNearestPokecenter,
+	isDigPathEnabled = PathFinder.isDigPathEnabled,
+	enableDigPath = PathFinder.enableDigPath,
+	disableDigPath = PathFinder.disableDigPath,
+	getPokemonEV = PokemonEV.getPokemonEV,
+	getMapSpawn = MapSpawn.getMapSpawn,
+	mapName = PathFinder.mapName,
+	getPathInMap = MapPath.getPath,
+	cellIsAccessible = MapPath.cellIsAccessible,
+	cellIsShoreline = MapPath.cellIsShoreline,
+	moveToShoreline = MapPath.moveToShoreline,
+	getMapToPokemon = PathFinder.getMapToPokemon,
+    getWalkingCheckpoints = PathFinder.getWalkingCheckpoints,
+    getLearnedMapLinks = PathFinder.getLearnedMapLinks,
+    logLearnedMapLinks = PathFinder.logLearnedMapLinks,
+    setCellCrawlLinkDistance = PathFinder.setCellCrawlLinkDistance,
+}
