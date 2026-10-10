@@ -886,7 +886,7 @@ return {
     },
     ["Floaroma Meadow"] = {
         ["Floaroma Meadow_A"] = {{44, 21, 61, 24}, {16, 4, 62, 21}}, -- Top
-        ["Floaroma Meadow_B"] = {{13, 25, 61, 42}, {13, 22, 35, 23}, {13, 21, 14, 21}}, -- Bottom
+        ["Floaroma Meadow_B"] = {{13, 25, 61, 42}, {13, 22, 35, 24}, {13, 21, 14, 21}}, -- Bottom, including the landing strip below the west ledge
     },["Mt. Coronet 2F"] = {
         ["Mt. Coronet 2F_A"] = {{2, 1, 30, 36}}, -- Left
         ["Mt. Coronet 2F_B"] = {{38, 5, 48, 15}}, -- Middle

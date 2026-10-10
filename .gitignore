@@ -1,0 +1,22 @@
+# User data and runtime output are never part of the public bundle.
+Accounts/
+Logs/
+logs/
+Log/
+dataMap/
+daily_status.txt
+bms_status.txt
+*.log
+*.pm
+*.bak
+*.tmp
+
+# Local map/spawn editor snapshots and build/tool output.
+.map-editor-backups/
+SpawnBackups/
+*.backup.lua
+__pycache__/
+*.pyc
+.vs/
+.idea/
+node_modules/

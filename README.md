@@ -2,11 +2,15 @@
 
 Thư viện điều hướng Lua dựa trên Pathfinder 2.6.5, dành cho môi trường
 Basculegion/PROShine có API Lua tương thích. Repo cung cấp module, dữ liệu map
-và cấu hình dùng chung; **không phải một script bot chạy độc lập**.
+và cấu hình dùng chung. Thư viện **không phải một script bot chạy độc lập**;
+bundle có thêm script tùy chọn `DailySolaceon.lua` và helper đi kèm.
 
 ## Nội dung
 
 ```text
+DailySolaceon.lua        -- Script daily tùy chọn
+Lib/
+  DailySolaceonHunt.lua  -- Chọn bãi và patrol cho Daily
 Pathfinder/
   MoveToApp.lua          -- Entry point cho script sử dụng thư viện
   Lib/                  -- Điều hướng, hội thoại và helper
@@ -19,8 +23,8 @@ README.md
 CHANGELOG.md
 ```
 
-Không đưa `Script.lua`, script cá nhân nằm ngoài hai thư mục, bản backup,
-log hoặc ID tài khoản vào bản phát hành.
+Ngoài Daily/helper công khai ở trên, không đưa `Script.lua`, script cá nhân,
+bản backup, log hoặc ID tài khoản vào bản phát hành.
 
 ## Cài đặt
 
@@ -30,12 +34,19 @@ log hoặc ID tài khoản vào bản phát hành.
    ```
 2. Đặt hai thư mục `Pathfinder/` và `Settings/` cạnh script của bạn.
    Giữ nguyên cấu trúc; chỉ chép `MoveToApp.lua` là không đủ.
+   Nếu dùng Daily, chép thêm **cả** `DailySolaceon.lua` và `Lib/DailySolaceonHunt.lua`.
 3. Nạp module ở đầu script, trước khi bot bắt đầu chạy.
 4. Sau khi cập nhật module/cấu hình, nạp lại script để tránh dùng module đã cache.
 
 Thư viện cần các API do client cung cấp như `registerHook`, `getMapName`,
 `getPlayerX`, `getPlayerY`, `moveToCell` và `talkToNpcOnCell`.
 Không chạy trực tiếp bằng trình thông dịch Lua thông thường.
+
+Avalonia Windows mặc định dùng bundle ngoài ứng dụng tại
+`%LOCALAPPDATA%\Basculegion\Avalonia\scripts\Pathfinder-main\`.
+Startup giữ nguyên file người dùng đã có; cập nhật binary không tự ghi đè bundle
+này. Sao lưu và giữ cấu hình/file trạng thái cá nhân khi chép bản mới, sau đó
+**Stop → nạp lại script → Start** để đọc lại module Lua.
 
 ## Sử dụng
 
@@ -107,9 +118,42 @@ từ node nguồn. `MapExceptions` được xử lý trước `MapLink`; chỉ s
   để bước ra trước khi bước lại vào link.
 - Không thay phân vùng hiện tại bằng một đường cắt Y đơn giản.
 
+### Floaroma Meadow
+
+- A ở trên đồi, B ở dưới; vách nhảy chỉ cho đi A → B.
+- Từ B lên A đi vòng qua Floaroma Town → Route 205 → Fuego Ironworks.
+  Không thêm cạnh leo ngược hoặc gộp hai vùng.
+- B bao gồm hàng `(13..35,24)`, sửa lookup bị thiếu tại `(24,24)`.
+- Checkpoint Town → B dùng `{{12,4,13,4}}`; cạnh A → B có MapLink và
+  MapException tới dải đáp `(20..34,23)`, tránh bị bỏ qua do cùng map vật lý.
+- `moveToGrass()` không biết tuyến qua subnode/map khác. Script phải tới đúng
+  node trước khi săn; `pf.isSameMap()` không chứng minh đã tới đúng vùng.
+
+### Daily Solaceon tùy chọn
+
+- Chọn node spawn gần nhất theo chi phí Pathfinder đang cấu hình; chỉ xét
+  spawn đúng giờ, membership và không fishing-only. Không cắt danh sách 50 map.
+- Giữ đích ổn định khi đi đường; không tìm cỏ ở map hiện tại khi vừa chọn bãi
+  hoặc đi tới bãi thất bại. Hai lần từ chối tại cùng vị trí sẽ đổi tuyến/bãi.
+- Patrol hai ô encounter liền kề trong đúng node, tránh NPC và đường qua map
+  link; không chọn cỏ/rectangle ngẫu nhiên trên toàn map.
+- Land dùng grass, hoặc normal ground trong nhà khi không có grass hợp lệ;
+  Surf dùng water. Không mặc định normal ground ngoài trời có encounter.
+- Giới hạn 24 local-path checks / 8 blocked-route searches mỗi callback.
+  Không thêm thời gian chờ giữa các bước patrol thành công.
+- Giữ luồng quest/bắt Pokémon/PC và file trạng thái; cập nhật script cùng helper.
+
+Script cần API host Basculegion hiện tại, gồm `waitForState`, `getCellType`,
+`isNpcOnCell` và các hàm thời gian/membership. Nó không thêm API mới vào client.
+Bãi không có hai ô encounter liền kề có thể tới được sẽ bị bỏ qua; hết ứng viên
+sẽ dừng có lý do. Encounter ground trong nhà là suy luận từ dữ liệu Land/cell
+type, không phải bảng spawn từng ô từ server.
+
 ### Giới hạn hiện tại
 
 - CellCrawl tự học link đang **tắt trong `MoveTo.lua`**, dù file module vẫn có trong repo.
+- Giữ `USE_GRAPH_COST_ONLY = true`: gần nhất theo trọng số graph của bản công
+  khai, không tự chuyển sang chế độ cộng khoảng cách đi bộ của bản desktop khác.
 - Dữ liệu map là dữ liệu authored, không tự đồng bộ khi server đổi map.
 - Kiểm tra cú pháp/offline không chứng minh mọi tuyến hoạt động trên server.
 - Chuyển vùng Feral A ↔ B sau bản sửa vẫn cần xác nhận bằng trace live mới.
@@ -122,10 +166,23 @@ chơi, checkpoint bị lỗi và một đoạn log ngắn. Không gửi thông t
 Bản publish đầu đã qua kiểm tra cú pháp MoonSharp **47/47 file Lua**, cấu hình
 default-only và parse JSON/Python. Không có bộ test live-server tự động trong repo.
 
+Đợt Daily/Floaroma đã kiểm tra với regression trong source Basculegion, chạy
+bằng `-ScriptRoot` trỏ tới chính clone repo này (không dùng thư viện thay thế):
+
+```powershell
+# Chạy từ source Basculegion đã build Debug; thay đường dẫn clone của bạn.
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/DailySolaceonHuntRegression.ps1 -ScriptRoot 'D:\Pathfinder-asf'
+powershell -NoProfile -ExecutionPolicy Bypass -File tests/FloaromaMeadowPathfinderRegression.ps1 -ScriptRoot 'D:\Pathfinder-asf'
+```
+
+Các runner phụ thuộc MoonSharp/Core trong source host, không được kèm như test
+standalone của repo này. Kiểm tra cache Floaroma báo SKIP nếu không có map cache.
+Kết quả offline không chứng minh NPC/quest hoặc hành trình hiện tại trên server.
+
 Giữ thay đổi nhỏ, kiểm tra đúng call chain và chỉ stage các đường dẫn cần thiết:
 
 ```sh
-git add -- Pathfinder Settings README.md CHANGELOG.md
+git add -- Pathfinder Settings DailySolaceon.lua Lib/DailySolaceonHunt.lua README.md CHANGELOG.md .gitignore
 ```
 
 Trước khi push, kiểm tra `git diff --cached` và làm sạch profile cá nhân trong

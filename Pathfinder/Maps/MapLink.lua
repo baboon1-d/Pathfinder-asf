@@ -1041,11 +1041,12 @@ mapLink["Ravaged Path_B"] = {["Route 204_B"] = {{30, 41}}}
 mapLink["Route 204_B"] = {["Ravaged Path_B"] = {{19, 26}}, ["Floaroma Town"] = {{8, 0, 11, 0}}}
 
 --Floaroma Town
-mapLink["Floaroma Town"] = {["Route 204_B"] = {{19, 41, 22, 41}}, ["Pokecenter Floaroma"] = {{25, 34}}, ["Mart Floaroma"] = {{36, 25}}, ["Route 205_A"] = {{45, 25, 45, 28}}, ["Floaroma Meadow_B"] = {12, 4, 13, 4}}
+mapLink["Floaroma Town"] = {["Route 204_B"] = {{19, 41, 22, 41}}, ["Pokecenter Floaroma"] = {{25, 34}}, ["Mart Floaroma"] = {{36, 25}}, ["Route 205_A"] = {{45, 25, 45, 28}}, ["Floaroma Meadow_B"] = {{12, 4, 13, 4}}}
 mapLink["Pokecenter Floaroma"] = {["Floaroma Town"]= {{7, 15, 8, 15}},["Transmat Station Sinnoh"]={S_TELE}}
 mapLink["Mart Floaroma"] = {["Floaroma Town"] = {{4, 11, 5, 11}}}
 mapLink["Floaroma Meadow_B"] = {["Floaroma Town"] = {{15, 42, 16, 42}}}
-mapLink["Floaroma Meadow_A"] = {["Fuego Ironworks"] = {{56, 5, 57, 5}}}
+-- These are downhill landing cells, not a reversible A/B doorway.
+mapLink["Floaroma Meadow_A"] = {["Fuego Ironworks"] = {{56, 5, 57, 5}}, ["Floaroma Meadow_B"] = {{20, 23, 34, 23}}}
 mapLink["Route 205_A"] = {["Floaroma Town"] = {{0, 105, 0, 108}}, ["Valley Windworks"] = {{39, 107, 39, 108}}, ["Eterna Forest"] = {{14, 28, 15, 28}}, ["Fuego Ironworks"] = {{0, 49, 0, 51}}}
 mapLink["Route 205_B"] = {["Eterna City"] = {{64, 17, 64, 22}}, ["Eterna Forest"] = {{33, 10, 33, 11}}}
 mapLink["Valley Windworks"] = {["Route 205_A"] = {{0, 71, 0, 72}}}

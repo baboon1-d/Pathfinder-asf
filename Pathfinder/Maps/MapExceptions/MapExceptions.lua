@@ -7,6 +7,12 @@ local Lib = require (cppdpath .. "Lib/Lib")
 
 local mapExceptions = {}
 
+-- Same physical map, but distinct reachable regions separated by one-way
+-- ledges. Keep A -> B actionable instead of skipping it as "same map".
+-- Never add the reverse edge: B reaches A through Route 205 / Fuego Ironworks.
+mapExceptions["Floaroma Meadow_A"] = {
+    ["Floaroma Meadow_B"] = {{20, 23, 34, 23}}
+}
 
 mapExceptions["Mt. Coronet 2F_A"] = {
     ["Mt. Coronet 2F_B"] = {{8, 2}}
