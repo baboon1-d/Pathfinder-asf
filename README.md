@@ -3,14 +3,17 @@
 Thư viện điều hướng Lua dựa trên Pathfinder 2.6.5, dành cho môi trường
 Basculegion/PROShine có API Lua tương thích. Repo cung cấp module, dữ liệu map
 và cấu hình dùng chung. Thư viện **không phải một script bot chạy độc lập**;
-bundle có thêm script tùy chọn `DailySolaceon.lua` và helper đi kèm.
+bundle có thêm hai script tùy chọn `DailySolaceon.lua`, `digrework.lua` và helper
+đi kèm.
 
 ## Nội dung
 
 ```text
 DailySolaceon.lua        -- Script daily tùy chọn
+digrework.lua            -- Lịch Dig + PokeStop + Berry, không Excavation
 Lib/
   DailySolaceonHunt.lua  -- Chọn bãi và patrol cho Daily
+  ActiveHarvestRoute.lua -- Điều phối công việc và lịch vùng của DigRework
 Pathfinder/
   MoveToApp.lua          -- Entry point cho script sử dụng thư viện
   Lib/                  -- Điều hướng, hội thoại và helper
@@ -23,7 +26,7 @@ README.md
 CHANGELOG.md
 ```
 
-Ngoài Daily/helper công khai ở trên, không đưa `Script.lua`, script cá nhân,
+Ngoài hai script/helper công khai ở trên, không đưa `Script.lua`, script cá nhân,
 bản backup, log hoặc ID tài khoản vào bản phát hành.
 
 ## Cài đặt
@@ -35,6 +38,7 @@ bản backup, log hoặc ID tài khoản vào bản phát hành.
 2. Đặt hai thư mục `Pathfinder/` và `Settings/` cạnh script của bạn.
    Giữ nguyên cấu trúc; chỉ chép `MoveToApp.lua` là không đủ.
    Nếu dùng Daily, chép thêm **cả** `DailySolaceon.lua` và `Lib/DailySolaceonHunt.lua`.
+   Nếu dùng DigRework, chép thêm **cả** `digrework.lua` và `Lib/ActiveHarvestRoute.lua`.
 3. Nạp module ở đầu script, trước khi bot bắt đầu chạy.
 4. Sau khi cập nhật module/cấu hình, nạp lại script để tránh dùng module đã cache.
 
@@ -42,11 +46,12 @@ Thư viện cần các API do client cung cấp như `registerHook`, `getMapName
 `getPlayerX`, `getPlayerY`, `moveToCell` và `talkToNpcOnCell`.
 Không chạy trực tiếp bằng trình thông dịch Lua thông thường.
 
-Avalonia Windows mặc định dùng bundle ngoài ứng dụng tại
-`%LOCALAPPDATA%\Basculegion\Avalonia\scripts\Pathfinder-main\`.
-Startup giữ nguyên file người dùng đã có; cập nhật binary không tự ghi đè bundle
-này. Sao lưu và giữ cấu hình/file trạng thái cá nhân khi chép bản mới, sau đó
-**Stop → nạp lại script → Start** để đọc lại module Lua.
+Có thể nạp script trực tiếp từ thư mục clone/workspace, chẳng hạn
+`D:\Pathfinder-main1\digrework.lua`, miễn giữ các module bên cạnh. **Không cần
+chép vào Avalonia AppData** để chạy. Nếu đang dùng bundle trong AppData, đó là
+một bản riêng: cập nhật repo không tự cập nhật bản ấy. Sao lưu và giữ cấu hình/
+file trạng thái cá nhân khi cập nhật; dùng **Stop → nạp lại script → Start**
+để đọc lại module Lua (chỉ Stop/Start có thể vẫn dùng `require` đã cache).
 
 ## Sử dụng
 
@@ -65,11 +70,33 @@ hồi phục và công việc sau khi đến đích.
 
 | API | Mục đích |
 | --- | --- |
-| `pf.moveTo(currentMap, destination)` | Tiếp tục hành trình đến map hoặc node đích. |
-| `pf.getPath(startNode, destination)` | Lấy tuyến graph, không thực hiện di chuyển. |
+| `pf.moveTo(currentMap, destination, options)` | Tiếp tục hành trình; `options` là tùy chọn. |
+| `pf.getPath(startNode, destination, options)` | Lấy tuyến và graph cost, không thực hiện di chuyển. |
 | `pf.getMapNode(map, x, y)` | Xác định node/submap tại tọa độ. |
+| `pf.getRegion(node)` | Vùng từ dữ liệu graph authored, không đoán theo tên map. |
 | `pf.mapName()` | Lấy node hiện tại của người chơi. |
 | `pf.moveToMapCell(currentMap, destinationMap, x, y)` | Điều hướng đến một ô trên map đích. |
+| `pf.setMount(item)`, `pf.setWaterMount(item)` | Chọn mount qua API host; mount đất đồng bộ với cấu hình điều hướng của Pathfinder. |
+| `pf.useMount()` | Dùng mount đất đã chọn khi host cho phép; không phải thao tác Surf. |
+
+Các tùy chọn opt-in, không thay trọng số hoặc cấu hình persistent:
+
+```lua
+local options = {
+    requireActionable = true, -- chỉ dùng cạnh có checkpoint/handler
+    preferTransport = true,  -- ưu tiên Subway/Transmat đang bật
+    digFallback = true       -- bỏ qua đường tắt Dig bị từ chối và tính lại
+}
+-- Trong onPathAction; vẫn kiểm tra đến đích theo state thực tế.
+return pf.moveTo(pf.mapName(), "Viridian Maze", options)
+```
+
+`preferTransport` chỉ dùng dịch vụ được `USE_SUBWAY`/`USE_TELEPORT` cho phép.
+Nếu tuyến thường chưa dùng dịch vụ, policy so sánh các tuyến tiếp cận → dịch vụ
+→ đích không lặp node, kể cả graph cost cao hơn đi bộ; không có tuyến dịch vụ
+hợp lệ thì dùng tuyến thường. Forest → Maze không bị biến thành vòng đi ga.
+`digFallback` có hiệu lực lúc di chuyển, không phải một action trong `getPath`.
+Không truyền options thì không bật các policy opt-in này.
 
 Chỉ thực hiện **một action mỗi callback**. Khi lời gọi trả `true`, hãy kết thúc
 callback ngay; action được gửi/queued không đồng nghĩa server đã hoàn tất.
@@ -149,6 +176,53 @@ Bãi không có hai ô encounter liền kề có thể tới được sẽ bị 
 sẽ dừng có lý do. Encounter ground trong nhà là suy luận từ dữ liệu Land/cell
 type, không phải bảng spawn từng ô từ server.
 
+### DigRework tùy chọn
+
+- Dùng chung một bộ điều phối cho `getActiveDigSpots`, `getActivePokestop` và
+  `getActiveBerryTrees`; không Excavation/cart hoặc tự dùng Escape Rope.
+- Lịch cố định **Kanto → Johto → Hoenn → Sinnoh**. Trong vùng đang đến lượt,
+  chọn công việc còn lại theo graph cost và giữ đích khi di chuyển; có thể
+  thu gom điểm local cùng vùng trên đường. Không chọn lại đích sau mỗi bước.
+- `PREFER_TRANSPORT = true`: ưu tiên Subway/Teleport khi được bật trong Settings.
+  Chọn công việc vẫn dùng graph cost thường để không bỏ qua việc ngay cạnh;
+  policy dịch vụ chỉ áp dụng hành trình tới đích đã chọn.
+- `FALLBACK_DIG_PATH = true`: nếu không có Dig hợp lệ, NPC không sẵn sàng,
+  tương tác bị từ chối/lỗi hoặc gặp câu từ chối outlet đã biết, bỏ qua **cạnh
+  Dig một chiều đó** trong RAM, nhường tick rồi tính lại tới **cùng đích**.
+  Không đánh dấu công việc DONE, không tắt mọi đường Dig và không ép khám phá
+  cửa ngược khi đến bằng đường bộ. Các dịch vụ đang bật vẫn được ưu tiên.
+- Không có tuyến thay thế thì hoãn công việc theo lịch. Điểm bị chặn không
+  khiến script quay về vùng trước sau vài giây; vòng mới chờ cooldown thu gom
+  thật hoặc lần Start mới. Danh sách cạnh Dig bị bỏ qua xóa khi Start/Stop.
+- Xác nhận hết điểm bằng nhiều snapshot API hợp lệ; chỉ ghi DONE đúng node/vùng
+  đã kiểm tra. API lỗi, thiếu node hoặc di chuyển thất bại không phải DONE.
+- Danh sách Berry nằm trong `BERRY_MAPS` của script; **không tự tạo database map
+  berries**. API chỉ cho biết các điểm đang active trên map hiện tại. Sửa các
+  danh sách `DIG_MAPS`, `POKESTOP_MAPS`, `BERRY_MAPS` nếu muốn thay phạm vi chạy.
+- Giữ ba file `<account>_digspot_status.txt`, `<account>_pokestop_status.txt`,
+  `<account>_berry_status.txt`, record `DONE:<node>:<timestamp>` và cooldown
+  Dig 3 ngày / PokeStop 2 ngày / Berry 4 ngày. Các file này không đưa lên Git.
+
+Nạp script cùng toàn bộ module phiên bản này. Cần các API active-harvest và
+`waitForState` của host Basculegion tương thích. Với host có
+`tryTalkToNpcOnCell`, Dig travel dùng binding không fatal; host cũ kiểm tra NPC
+trước lời gọi legacy. Không suy đoán dialog lạ là thất bại và không thêm
+timeout tùy tiện. Lịch này không phải lời giải tối ưu toàn cục theo thời gian:
+graph cost không phải số giây; map đã kiểm tra vẫn có thể là điểm trung gian
+cần thiết của tuyến (Maze chỉ nối với Forest).
+
+### Map/helper đồng bộ thêm
+
+- Alias chính xác `Meteor Falls 1F 1R` → tên graph legacy `Meteor falls 1F 1R`,
+  giữ phân biệt `_A`, `_B`, ...; không đổi tên mọi map một cách mù quáng.
+- Route 16 Stop House: cửa tây `(0,6)` → A/nhà Yorkie, cửa đông `(20,6)` → B.
+- Mt. Mortar 1F: NPC DigSpot `(57,36)` thuộc C để API xác định đúng node;
+  không thay collider hoặc làm ô tường thành ô đi được.
+- Checkpoint `LinkExceptions` được dùng nếu chưa có `MapLink`; cạnh thiếu
+  checkpoint không thắng tuyến authored chỉ nhờ chi phí fallback nhỏ.
+- Tách chống lặp log progress/checkpoint; refresh inventory restriction mỗi
+  lần tính tuyến, tránh làm mất Bicycle đã sở hữu ở lần gọi xen kẽ.
+
 ### Giới hạn hiện tại
 
 - CellCrawl tự học link đang **tắt trong `MoveTo.lua`**, dù file module vẫn có trong repo.
@@ -175,6 +249,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/DailySolaceonHuntRegre
 powershell -NoProfile -ExecutionPolicy Bypass -File tests/FloaromaMeadowPathfinderRegression.ps1 -ScriptRoot 'D:\Pathfinder-asf'
 ```
 
+Đợt DigRework chạy thêm `DigTravelFallbackRegression`,
+`DigReworkTransportPreferenceRegression`, `DigReworkCombinedRegression`,
+`HarvestRegionScheduleRegression`, `PathfinderActionableRouteRegression`,
+`PathfinderNavigationLogRegression` và `MeteorFallsMapNameRegression` cùng cách
+truyền `-ScriptRoot` tới clone publish. Xem kết quả theo ngày trong changelog.
+
 Các runner phụ thuộc MoonSharp/Core trong source host, không được kèm như test
 standalone của repo này. Kiểm tra cache Floaroma báo SKIP nếu không có map cache.
 Kết quả offline không chứng minh NPC/quest hoặc hành trình hiện tại trên server.
@@ -182,7 +262,7 @@ Kết quả offline không chứng minh NPC/quest hoặc hành trình hiện t�
 Giữ thay đổi nhỏ, kiểm tra đúng call chain và chỉ stage các đường dẫn cần thiết:
 
 ```sh
-git add -- Pathfinder Settings DailySolaceon.lua Lib/DailySolaceonHunt.lua README.md CHANGELOG.md .gitignore
+git add -- Pathfinder DailySolaceon.lua digrework.lua Lib/DailySolaceonHunt.lua Lib/ActiveHarvestRoute.lua README.md CHANGELOG.md .gitignore
 ```
 
 Trước khi push, kiểm tra `git diff --cached` và làm sạch profile cá nhân trong

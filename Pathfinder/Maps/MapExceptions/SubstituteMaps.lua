@@ -267,7 +267,9 @@ return {
     ["Mt. Mortar 1F"] = {
         ["Mt. Mortar 1F_A"] = {{21, 35, 31, 46}, {32, 35, 34, 36}}, -- bottom left
         ["Mt. Mortar 1F_B"] = {{33, 38, 35, 42}, {36, 32, 51, 49}, {52, 38, 54, 42}}, -- bottom center
-        ["Mt. Mortar 1F_C"] = {{53, 35, 56, 36}, {56, 37, 63, 43}, {64, 41, 67, 46}}, -- bottom right
+        -- DigSpot (57,36) is on a wall cell, interacted with from C's (56,36)
+        -- or (57,37). Give the NPC a region without widening walkable terrain.
+        ["Mt. Mortar 1F_C"] = {{53, 35, 56, 36}, {57, 36, 57, 36}, {56, 37, 63, 43}, {64, 41, 67, 46}}, -- bottom right
         ["Mt. Mortar 1F_D"] = {{55, 46, 57, 48}, {55, 49, 70, 52}, {71, 34, 75, 51}}, -- bottom right upside
         ["Mt. Mortar 1F_E"] = {{24, 19, 31, 26}, {31, 23, 36, 25}}, -- top left
         ["Mt. Mortar 1F_F"] = {{26, 14, 65, 16}, {26, 17, 60, 18}, {33, 19, 57, 21}, {32, 22, 50, 22}, {38, 23, 50, 26}}, -- top center

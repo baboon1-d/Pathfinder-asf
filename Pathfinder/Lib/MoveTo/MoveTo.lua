@@ -18,13 +18,19 @@ local _npcExceptions      = require (cppdpath .. "Maps/MapExceptions/NpcExceptio
 local digways             = require (cppdpath .. "Maps/MapExceptions/Digways")
 local mapExceptions       = require (cppdpath .. "Maps/MapExceptions/MapExceptions")
 local dialogSolver        = require (cppdpath .. "Lib/MoveTo/DialogSolver")
--- CellCrawl (tự học link theo ô) đã bị tắt: dùng bản giả rỗng để không còn log/hook của nó.
-local cellCrawl          = {
+-- Preserve main1's explicit opt-out: do not enable discovery hooks/logs.
+local CELL_CRAWL_ENABLED = false
+local cellCrawl = {
     attachPathfinder = function() end,
     getLearnedLinks = function() return {} end,
     logLearnedLinks = function() end,
     setMaxSourceLinkDistance = function() end,
+    getKnowledgeSummary = function() return "CellCrawl disabled by main1 preference" end,
+    moveToFrontier = function() return false, "CellCrawl disabled by main1 preference" end,
 }
+if CELL_CRAWL_ENABLED then
+    cellCrawl = require (cppdpath .. "Lib/MoveTo/CellCrawl")
+end
 local elevatorExceptions  = require (cppdpath .. "Maps/MapExceptions/Elevators")
 -- SpawnData is only needed by getMapToPokemon(). Loading it here made every
 -- Pathfinder script parse the whole hunt database during startup.
@@ -41,9 +47,14 @@ local moveAbilities       = {["cut"] = 0, ["surf"] = 0, ["dig"] = 155, ["rock sm
 local workAbilities       = {["headbutt"] = 155, ["dig"] = 0}
 local moveItems           = {"Fresh Water", "Marsh Badge", "Zephyr Badge", "Bicycle", "Go-Goggles", "Green Bicycle", "Blue Bicycle", "Yellow Bicycle"}
 local globalMap           = {}
+local mapRegions          = {}
 local pathSolution        = {}
 local settings            = {}
 local destStore           = ""
+local routePolicyStore    = ""
+local digFallbackActive   = false
+local blockedDigways      = {}
+local skipUnavailableDigway
 local npcExceptions       = nil
 local outlet              = nil
 local playerNode          = nil
@@ -51,6 +62,22 @@ local from                = nil
 local toMap               = nil
 local digIndex            = nil
 local walkingCheckpoints  = {}
+local routeLength         = 0
+
+-- Optional Quest Studio observer. This reports existing Pathfinder state and
+-- never participates in routing or action selection.
+local function studioPathfinder(state, destination, currentEdge, progress, failure)
+    if type(questStudioPathfinder) == "function" then
+        questStudioPathfinder(state or "Unavailable", destination or "",
+            currentEdge or "", progress or "", failure or "")
+    end
+end
+
+local function studioTrace(eventName, details)
+    if type(questStudioTrace) == "function" then
+        questStudioTrace(eventName, tostring(details or ""))
+    end
+end
 
 -----------------------------------
 ----- A* NECESSARY  FUNCTIONS -----
@@ -113,7 +140,7 @@ local function getUsableLinks(fromNode, links)
                 break;
             end
         end
-        if isLinkValid then
+        if isLinkValid and not (blockedDigways[fromNode] and blockedDigways[fromNode][link]) then
             usableLinks[#usableLinks + 1] = link
         end
     end
@@ -122,7 +149,12 @@ end
 
 -- return a table of node, linked to the node n
 local function expand(n)
-    assert(type(globalMap[n]) == "table", "Pathfinder --> Received node \"" .. n .. "\" doesn't exist in the map.")
+    -- A newly released or event map may not exist in the authored graph yet.
+    -- Returning no authored neighbors lets CellCrawl inspect its authoritative
+    -- live link cells instead of terminating before discovery can begin.
+    if type(globalMap[n]) ~= "table" then
+        return {}
+    end
     return getUsableLinks(n, globalMap[n])
 end
 
@@ -215,12 +247,25 @@ local function solveMapExce(mapExceptions, n1, n2)
 end
 
 -- check if the nodes are the same map
+-- Current cached/server spelling uses "Falls"; the authored graph and region
+-- rectangles use legacy "falls". Resolve this proven alias only. Keep suffix
+-- regions distinct and never turn arbitrary misspellings into valid maps.
+local mapNameAliases = {["Meteor Falls 1F 1R"] = "Meteor falls 1F 1R"}
+local function canonicalMapName(map)
+    if type(map) ~= "string" then return map end
+    local physical, suffix = map:match("^(.-)(_%u)$")
+    physical = physical or map
+    return (mapNameAliases[physical] or physical) .. (suffix or "")
+end
+
 local function isSameMap(n1, n2)
+    n1, n2 = canonicalMapName(n1), canonicalMapName(n2)
     return n1:gsub("_%u$", "") == n2:gsub("_%u$", "")
 end
 
 -- check if the nodes are the same map
 local function isDestination(n1, n2)
+    n1, n2 = canonicalMapName(n1), canonicalMapName(n2)
     return n1:gsub("_%u$", "") == n2:gsub("_%u$", "") and not exceptionExist(npcExceptions, n1, n2) and not exceptionExist(digways, n1, n2) and not exceptionExist(mapExceptions, n1, n2)
 end
 
@@ -247,6 +292,32 @@ local function handleException(n1, n2)
     elseif exceptionExist(elevatorExceptions, n1, n2) then
         return solveElevatorExce(n1, n2)
     elseif exceptionExist(digways, n1, n2) then
+        if digFallbackActive then
+            -- A cached route may outlive a party/item change. Some legacy Dig
+            -- graph edges are unconditional; never queue a nil/obsolete slot.
+            settings.abilitiesIndex.dig=hasItem("Shovel") and 1
+                or Game.getPokemonNumberWithMove("dig",moveAbilities.dig)
+            if not settings.abilitiesIndex.dig then
+                skipUnavailableDigway(n1,n2,"khong co Dig hop le")
+                return waitForState(1)
+            end
+            local x,y=table.unpack(digways[n1][n2][1])
+            local talk=tryTalkToNpcOnCell
+            if type(talk)~="function" then
+                -- Old hosts: avoid the fatal missing-NPC binding where possible.
+                if type(isNpcOnCell)~="function" or not isNpcOnCell(x,y) then
+                    skipUnavailableDigway(n1,n2,"NPC khong san sang")
+                    return waitForState(1)
+                end
+                talk=talkToNpcOnCell
+            end
+            local ok,accepted=pcall(talk,x,y)
+            if ok and accepted then return true end
+            skipUnavailableDigway(n1,n2,ok and "khong the tuong tac" or "loi tuong tac Dig")
+            -- Do not attempt another game action after a rejected interaction.
+            -- Yield once, then replan the SAME goal on the next ready bot tick.
+            return waitForState(1)
+        end
         return assert(talkToNpcOnCell(table.unpack(digways[n1][n2][1])), "Pathfinder --> Error: Exception invalid for: " .. n1 .. " -> " .. n2)
     elseif exceptionExist(mapExceptions, n1, n2) then
         return solveMapExce(mapExceptions, n1, n2)
@@ -259,7 +330,7 @@ end
 
 -- return the node coresponding to the current player pos. Also used to return the current map, with submap tag if applicable
 local function getPlayerNode(map)
-	map = map or getMapName()
+	map = canonicalMapName(map or getMapName())
 	local playerInRectangle = Lib.inRectangle(getPlayerX(), getPlayerY())
 	if subMaps[map] then
 		for subMap, locs in pairs(subMaps[map]) do
@@ -271,13 +342,15 @@ local function getPlayerNode(map)
 		end
 		error("Pathfinder --> sub map could not be defined, map: " .. map .. "  x: " .. getPlayerX() .. "  y: " .. getPlayerY())
 	end
-	assert(globalMap[map], "Pathfinder -> Location does not exist in the map: " .. tostring(map))
+	-- Unknown current maps are handed to CellCrawl. Destinations remain
+	-- validated by mapsToNodes, so this does not turn misspelled targets into
+	-- discovery requests.
 	return map
 end
 
 -- return the node coresponding to the current player pos. Also used to return the current map, with submap tag if applicable
 local function getMapNode(map, x, y)
-	map = map or getMapName()
+	map = canonicalMapName(map or getMapName())
 	local playerInRectangle = Lib.inRectangle(x, y)
 	if subMaps[map] then
 		for subMap, locs in pairs(subMaps[map]) do
@@ -299,6 +372,7 @@ local function mapsToNodes(mapList)
         mapList = {mapList}
     end
     for _, map in pairs(mapList) do
+        map = canonicalMapName(map)
         if subMaps[map] then  -- if the map has sub maps
             for submap, _ in pairs(subMaps[map]) do
                 table.insert(nodeList, submap)
@@ -344,11 +418,42 @@ end
 ---------------------------
 
 -- reset path
+-- Separate channels: Lib.log1time remembers only ONE message, so alternating
+-- progress/checkpoint lines otherwise defeat each other's duplicate check.
+local lastProgressLog,lastCheckpointLog
+local function navigationLog(channel,message)
+	if channel == "progress" then
+		if message == lastProgressLog then return end
+		lastProgressLog = message
+	else
+		if message == lastCheckpointLog then return end
+		lastCheckpointLog = message
+	end
+	log(message)
+end
 local function resetPath()
 	destStore = ""
+	routePolicyStore = ""
+	digFallbackActive = false
+	lastProgressLog,lastCheckpointLog = nil,nil
 	walkingCheckpoints = {}
+	routeLength = 0
 	from = nil
 	toMap = nil
+	studioPathfinder("Idle", "", "", "Idle", "")
+end
+
+skipUnavailableDigway=function(n1,n2,reason)
+    blockedDigways[n1]=blockedDigways[n1] or {}
+    if not blockedDigways[n1][n2] then
+        blockedDigways[n1][n2]=true
+        log("Pathfinder: Bo qua duong tat Dig "..n1.." -> "..n2.." ("..reason
+            .."); tinh lai tuyen thuong toi cung dich, KHONG ghi DONE.")
+    end
+    -- Unlike legacy outlet discovery, do not force another Dig interaction on
+    -- arrival after travelling around the unavailable shortcut.
+    outlet=nil
+    resetPath()
 end
 
 local function pointToRectangleDistance(x, y, target)
@@ -428,22 +533,73 @@ local function targetCentre(target)
     }
 end
 
+-- MapLink stores one or more source cells for ordinary edges.  The legacy
+-- LinkExceptions table stores the same kind of authored source coordinate as
+-- a single { x, y } target for split/ambiguous maps.  Keep MapLink authoritative
+-- when both exist, but consume LinkExceptions before considering live frontier
+-- exploration: those coordinates identify which of several real exits belongs
+-- to the graph edge.
+local function getAuthoredLinkTargets(fromNode, toNode)
+    local regularTargets = mapLinks[fromNode] and mapLinks[fromNode][toNode]
+    if type(regularTargets) == "table" then
+        return regularTargets, "MapLink"
+    end
+
+    local exceptionTarget = linkExceptions[fromNode]
+        and linkExceptions[fromNode][toNode]
+    if type(exceptionTarget) == "table" then
+        return { exceptionTarget }, "LinkExceptions"
+    end
+    return nil, nil
+end
+
+-- Optional harvest planning policy, not a change to the graph or its costs.
+-- A discovery-only edge must not send a harvesting tour across several maps
+-- before discovering that its final checkpoint was never authored. Ordinary
+-- getPath callers retain the legacy finite discovery penalty and behavior.
+local function hasActionableEdge(fromNode, toNode)
+    if getTransportType(fromNode,toNode) ~= nil
+        or exceptionExist(npcExceptions,fromNode,toNode)
+        or exceptionExist(elevatorExceptions,fromNode,toNode)
+        or exceptionExist(digways,fromNode,toNode)
+        or exceptionExist(mapExceptions,fromNode,toNode) then return true end
+    local targets = getAuthoredLinkTargets(fromNode,toNode)
+    for _,target in ipairs(targets or {}) do
+        if type(target) == "table" and (#target == 2 or #target == 4)
+            and targetCentre(target) ~= nil then return true end
+    end
+    return false
+end
+
 -- Map graph costs describe service/restriction weights.  For regular walking
 -- edges, refine that coarse value with the actual distance from the current
 -- entry point to the selected MapLink cell.  This replaces random exits with
 -- a deterministic shortest walking segment without loading other map files.
 local FALLBACK_WALKING_DISTANCE = 20
-
--- true  = đường "chuẩn": chỉ dùng chi phí đã khai báo trong KantoMap/GlobalMap,
---         không phụ thuộc vị trí bot đang đứng (kết quả luôn giống nhau).
--- false = đường "gần nhất": cộng thêm khoảng cách thật tới cửa (hành vi cũ).
+-- Preserve main1's graph-only route preference, without letting missing
+-- authored checkpoints outrank routes that can actually issue movement.
 local USE_GRAPH_COST_ONLY = true
+-- A graph edge without an authored source cell is still eligible for
+-- CellCrawl discovery when it is the only route.  It must not, however, beat
+-- a fully actionable route merely because its unknown walking distance uses
+-- the small fallback estimate.  Keep unactionable edges behind every
+-- realistic authored walking route while leaving them finite for discovery.
+local UNAUTHORED_LINK_PENALTY = 1000000
 
 local function walkingSegment(fromNode, toNode, x, y)
+    local linkList = getAuthoredLinkTargets(fromNode, toNode)
+    if linkList == nil then
+        -- NPC/elevator/Dig/map handlers issue a real action without a walking
+        -- MapLink. In particular, authored ferry dialogs are not missing data.
+        if hasActionableEdge(fromNode,toNode) then
+            return tonumber(cost(fromNode,toNode)) or 1, nil, nil
+        end
+        return UNAUTHORED_LINK_PENALTY
+            + math.max(1, tonumber(cost(fromNode, toNode)) or 1), nil, nil
+    end
     if USE_GRAPH_COST_ONLY then
         return tonumber(cost(fromNode, toNode)) or 1, nil, nil
     end
-    local linkList = mapLinks[fromNode] and mapLinks[fromNode][toNode]
     if x ~= nil and y ~= nil and linkList ~= nil then
         local target, distance = getNearestMapLink(linkList, x, y)
         if target ~= nil then
@@ -456,14 +612,12 @@ local function walkingSegment(fromNode, toNode, x, y)
 end
 
 local function entryPointsFor(nextNode, fromNode, exitPoint)
-    if USE_GRAPH_COST_ONLY then
-        return { { x = nil, y = nil } }
-    end
+    if USE_GRAPH_COST_ONLY then return {{x=nil, y=nil}} end
     if exitPoint ~= nil and isSameMap(fromNode, nextNode) then
         return { exitPoint }
     end
 
-    local reverseLinks = mapLinks[nextNode] and mapLinks[nextNode][fromNode]
+    local reverseLinks = getAuthoredLinkTargets(nextNode, fromNode)
     local entries = {}
     if type(reverseLinks) == "table" then
         for _, target in ipairs(reverseLinks) do
@@ -553,7 +707,7 @@ end
 -- the known entry cell, allowing each walking map segment to be scored by real
 -- local distance. Transport edges retain their configured Static_Settings
 -- weights, and disabled services are filtered by getUsableLinks().
-local function getTravelPath(startNode, targets)
+local function getTravelPath(startNode, targets, requireActionable, walkingOnly)
     local targetSet = {}
     for _, target in ipairs(targets) do
         targetSet[target] = true
@@ -589,34 +743,154 @@ local function getTravelPath(startNode, targets)
         end
 
         local links = globalMap[state.node]
-        assert(type(links) == "table", "Pathfinder --> Received node \""
-            .. tostring(state.node) .. "\" doesn't exist in the map.")
+        if type(links) ~= "table" then
+            return nil, math.huge
+        end
         for _, nextNode in ipairs(getUsableLinks(state.node, links)) do
-            local transportType = getTransportType(state.node, nextNode)
-            local segmentCost, exitPoint
-            if transportType ~= nil then
-                segmentCost = tonumber(cost(state.node, nextNode)) or 1
-            else
-                segmentCost, _, exitPoint = walkingSegment(state.node, nextNode,
-                    state.x, state.y)
-            end
+            if (not walkingOnly or getTransportType(state.node,nextNode)==nil)
+                    and (not requireActionable or hasActionableEdge(state.node,nextNode)) then
+                local transportType = getTransportType(state.node, nextNode)
+                local segmentCost, exitPoint
+                if transportType ~= nil then
+                    segmentCost = tonumber(cost(state.node, nextNode)) or 1
+                else
+                    segmentCost, _, exitPoint = walkingSegment(state.node, nextNode,
+                        state.x, state.y)
+                end
 
-            for _, entryPoint in ipairs(entryPointsFor(nextNode, state.node, exitPoint)) do
-                local nextKey = routeStateKey(nextNode, entryPoint.x, entryPoint.y)
-                local newCost = scores[stateKey] + segmentCost
-                if scores[nextKey] == nil or newCost < scores[nextKey] then
-                    states[nextKey] = {
-                        node = nextNode,
-                        x = entryPoint.x,
-                        y = entryPoint.y,
-                    }
-                    scores[nextKey] = newCost
-                    cameFrom[nextKey] = stateKey
-                    pushPriority(open, newCost, nextKey)
+                for _, entryPoint in ipairs(entryPointsFor(nextNode, state.node, exitPoint)) do
+                    local nextKey = routeStateKey(nextNode, entryPoint.x, entryPoint.y)
+                    local newCost = scores[stateKey] + segmentCost
+                    if scores[nextKey] == nil or newCost < scores[nextKey] then
+                        states[nextKey] = {
+                            node = nextNode,
+                            x = entryPoint.x,
+                            y = entryPoint.y,
+                        }
+                        scores[nextKey] = newCost
+                        cameFrom[nextKey] = stateKey
+                        pushPriority(open, newCost, nextKey)
+                    end
                 end
             end
         end
     end
+end
+
+-- Graph-only mode needs two walking trees, not one full search per station.
+-- Reuse the existing queue, edge/restriction checks and segment costs. Reverse
+-- edges are only a planning index: they never add a traversable reverse link.
+local function serviceWalkingTrees(startNode, targets, strict)
+    local forward,reverse={},{}
+    for source,links in pairs(globalMap) do
+        for _,dest in ipairs(getUsableLinks(source,links)) do
+            if not getTransportType(source,dest) and (not strict or hasActionableEdge(source,dest)) then
+                local c=walkingSegment(source,dest,nil,nil)
+                forward[source]=forward[source] or {}
+                forward[source][#forward[source]+1]={node=dest,cost=c}
+                reverse[dest]=reverse[dest] or {}
+                reverse[dest][#reverse[dest]+1]={node=source,cost=c}
+            end
+        end
+    end
+    for _,graph in ipairs({forward,reverse}) do
+        for _,links in pairs(graph) do table.sort(links,function(a,b) return a.node<b.node end) end
+    end
+    local function tree(starts,graph)
+        local scores,parents,open={},{},newPriorityQueue()
+        for _,n in ipairs(starts) do scores[n]=0; pushPriority(open,0,n) end
+        while true do
+            local entry=popPriority(open)
+            if not entry then return scores,parents end
+            if scores[entry.key]==entry.priority then
+                for _,edge in ipairs(graph[entry.key] or {}) do
+                    local c=entry.priority+edge.cost
+                    if not scores[edge.node] or c<scores[edge.node] then
+                        scores[edge.node]=c; parents[edge.node]=entry.key
+                        pushPriority(open,c,edge.node)
+                    end
+                end
+            end
+        end
+    end
+    local accessCost,accessParents=tree({startNode},forward)
+    local egressCost,egressParents=tree(targets,reverse)
+    local function route(n,parents,backwards)
+        local p={}
+        while n do p[#p+1]=n; n=parents[n] end
+        if backwards then
+            for i=1,math.floor(#p/2) do p[i],p[#p-i+1]=p[#p-i+1],p[i] end
+        end
+        return p
+    end
+    return function(n) return accessCost[n] and route(n,accessParents,true),accessCost[n] end,
+        function(n) return egressCost[n] and route(n,egressParents,false),egressCost[n] end
+end
+
+-- Opt-in service priority for harvesting. The usual query still minimizes the
+-- original graph cost. For a fixed destination which otherwise needs no
+-- service, compare authored access -> service -> egress candidates instead.
+-- Access/egress cannot use another service; rejecting repeated nodes prevents
+-- visiting a station merely to return to the same map (Forest -> Maze, etc.).
+-- Never invent a station, override a disabled service, or change graph weights.
+local function getRequestedTravelPath(startNode, targets, options)
+    local strict=type(options)=="table" and options.requireActionable==true
+    local path,pathCost=getTravelPath(startNode,targets,strict)
+    if not path or #path<2 or type(options)~="table" or options.preferTransport~=true then
+        return path,pathCost
+    end
+    for i=1,#path-1 do
+        if getTransportType(path[i],path[i+1]) then return path,pathCost end
+    end
+    local services={}
+    for source,links in pairs(globalMap) do
+        for _,dest in ipairs(getUsableLinks(source,links)) do
+            if getTransportType(source,dest) then services[#services+1]={source,dest} end
+        end
+    end
+    if #services==0 then return path,pathCost end
+    -- Stable tie-breaking; pairs() order must not decide which station to use.
+    table.sort(services,function(a,b)
+        if a[1]==b[1] then return a[2]<b[2] end
+        return a[1]<b[1]
+    end)
+    local access,egress={},{}
+    local accessRoute,egressRoute
+    if USE_GRAPH_COST_ONLY then accessRoute,egressRoute=serviceWalkingTrees(startNode,targets,strict) end
+    local best,bestCost
+    for _,edge in ipairs(services) do
+        local source,dest=edge[1],edge[2]
+        if not access[source] then
+            local p,c
+            if accessRoute then p,c=accessRoute(source)
+            else p,c=getTravelPath(startNode,{source},strict,true) end
+            access[source]={path=p,cost=c}
+        end
+        if access[source].path then
+            if not egress[dest] then
+                local p,c
+                if egressRoute then p,c=egressRoute(dest)
+                else p,c=getTravelPath(dest,targets,strict,true) end
+                egress[dest]={path=p,cost=c}
+            end
+            if egress[dest].path then
+                local c=access[source].cost+cost(source,dest)+egress[dest].cost
+                if not bestCost or c<bestCost then
+                    local candidate,seen={},{}
+                    for _,n in ipairs(access[source].path) do
+                        candidate[#candidate+1]=n; seen[n]=true
+                    end
+                    local unique=true
+                    for _,n in ipairs(egress[dest].path) do
+                        if seen[n] then unique=false; break end
+                        candidate[#candidate+1]=n; seen[n]=true
+                    end
+                    if unique then best,bestCost=candidate,c end
+                end
+            end
+        end
+    end
+    return best or path,bestCost or pathCost
 end
 
 local function buildWalkingCheckpoints(path)
@@ -649,50 +923,75 @@ local function logWalkingCheckpoints()
 end
 
 local function errorInPath(from, toMap)
+	local failedDestination = destStore
+	local failedEdge = tostring(from) .. " -> " .. tostring(toMap)
+	studioTrace("RESYNC", "Pathfinder route reset after an unexpected map transition")
 	resetPath()
+	studioPathfinder("Recovery", failedDestination, failedEdge,
+		"Recalculating", "Unexpected map transition")
 	Lib.log1time("Pathfinder --> Error in Path: from " .. from .. " to " .. toMap .. " -- Reset and Recalc")
 	swapPokemon(getTeamSize(), getTeamSize() - 1)
 end
 
 -- try to move with exception, and with the map name if no exception are found.
 local function movingApply(from, toMap)
+	local completed = math.max(0, routeLength - #pathSolution)
+	studioPathfinder("Routing", destStore, tostring(from) .. " -> " .. tostring(toMap),
+		tostring(completed) .. " / " .. tostring(math.max(1, routeLength - 1)) .. " map edges", "")
 	if not isSameMap(from, getMapName()) then
 		-- Unexpectedly changed maps, could be due to black-out or moveToGrass/Water/NormalGround putting us on a link
 		errorInPath(from, toMap)
 		return true
 	end
-	Lib.log1time("Path: Maps Remains: " .. #pathSolution .. "  Moving To: --> " .. toMap)
+	navigationLog("progress", "Path: Maps Remains: " .. #pathSolution .. "  Moving To: --> " .. toMap)
 	if handleException(from, toMap) then
 		return true
-	elseif mapLinks[from] and mapLinks[from][toMap] then
-		local mapLink = mapLinks[from][toMap]
+	end
+
+	local mapLink, checkpointSource = getAuthoredLinkTargets(from, toMap)
+	if mapLink then
 		local target = getNearestMapLink(mapLink, getPlayerX(), getPlayerY())
 		if target == nil then
+			studioPathfinder("Failed", destStore, tostring(from) .. " -> " .. tostring(toMap),
+				"Blocked", "No usable walking checkpoint")
+			studioTrace("ERROR", "Pathfinder found no usable walking checkpoint")
 			log("Pathfinder: no usable walking checkpoint for "
 				.. tostring(from) .. " -> " .. tostring(toMap) .. ".")
 			return false
 		elseif #target == 2 then
-			local okCell = moveToCell(target[1], target[2])
-			if not okCell then
-				log("Pathfinder: moveToCell(" .. target[1] .. "," .. target[2] .. ") không đi được cho "
-					.. tostring(from) .. " -> " .. tostring(toMap)
-					.. " | vị trí=(" .. getPlayerX() .. "," .. getPlayerY() .. ")")
-			end
-			return okCell
+			navigationLog("checkpoint", "Pathfinder: authored checkpoint source="
+				.. tostring(checkpointSource) .. "; edge=" .. tostring(from)
+				.. " -> " .. tostring(toMap) .. ".")
+			return moveToCell(target[1], target[2])
 		end
-		local okRect = moveToRectangle(target[1], target[2], target[3], target[4])
-		if not okRect then
-			log("Pathfinder: moveToRectangle không đi được cho "
-				.. tostring(from) .. " -> " .. tostring(toMap)
-				.. " | vị trí=(" .. getPlayerX() .. "," .. getPlayerY() .. ")")
-		end
-		return okRect
+		navigationLog("checkpoint", "Pathfinder: authored checkpoint source="
+			.. tostring(checkpointSource) .. "; edge=" .. tostring(from)
+			.. " -> " .. tostring(toMap) .. ".")
+		return moveToRectangle(target[1], target[2], target[3], target[4])
 	end
-	-- Không có MapLink cho cặp node này: không có bước đi nào được thực hiện, nên
-	-- không được báo là đã có action (trước đây return true làm bot tự dừng).
-	log("Pathfinder: không có MapLink cho " .. tostring(from) .. " -> " .. tostring(toMap)
-		.. " | vị trí=(" .. getPlayerX() .. "," .. getPlayerY() .. ")")
-	return false
+
+	-- The graph can know that two maps are connected while the authored
+	-- MapLink database still lacks the source coordinate. Returning true here
+	-- used to report a successful Lua action without queuing movement, causing
+	-- the bot to stop with "No action executed". Continue only through an
+	-- unambiguous live link frontier; otherwise fail explicitly rather than
+	-- silently becoming idle.
+	local exploring, stallReason = cellCrawl.moveToFrontier(from, toMap, destStore)
+	if exploring then
+		studioPathfinder("Exploring", destStore,
+			tostring(from) .. " -> " .. tostring(toMap),
+			"Moving to frontier", "Missing authored map-link coordinate")
+		return true
+	end
+
+	studioPathfinder("Failed", destStore,
+		tostring(from) .. " -> " .. tostring(toMap),
+		"Blocked", tostring(stallReason or "No actionable checkpoint"))
+	studioTrace("ERROR", "Pathfinder stalled before " .. tostring(from)
+		.. " -> " .. tostring(toMap) .. ": " .. tostring(stallReason))
+	error("Pathfinder --> Cannot continue " .. tostring(from) .. " -> "
+		.. tostring(toMap) .. ": no authored checkpoint and no safe frontier ("
+		.. tostring(stallReason or "unknown") .. ").")
 end
 
 -- remove already crossed nodes then try to move
@@ -705,6 +1004,8 @@ local function moveWithCalcPath()
                 return movingApply(from, toMap)
             end
             log("Pathfinder: Destination Reached.")
+			studioPathfinder("Complete", destStore, "", "Complete", "")
+			studioTrace("ROUTE COMPLETE", destStore)
 			-- Release dialog ownership as soon as the authoritative map reaches
 			-- the destination. Questing remains responsible for the next step.
 			from = nil
@@ -746,14 +1047,14 @@ local function validateAbilitiesIndex(dirtyList, abilityList)
     return pokeIndexTable
 end
 
--- check if the account has items. We assume items previously validated are always true, to limit API calls.
-local function validateItems(currentItems, items)
+-- Snapshot the small restriction-item list at each route calculation.
+-- Replacing the table while skipping old true entries erased owned items on
+-- alternate calls (e.g. getPath -> moveTo incorrectly lost Bicycle).
+-- Re-read authoritative inventory so consumed/removed items do not stay true.
+local function validateItems(_currentItems, items)
     local accountItems = {}
-    currentItems = currentItems or {}
     for _, item in ipairs(items) do
-        if not currentItems[item] then
-            accountItems[item] = hasItem(item)
-        end
+        accountItems[item] = hasItem(item)
     end
     return accountItems
 end
@@ -806,29 +1107,88 @@ local function findSettings(dest)
 end
 
 -- main function called by users
-local function moveTo(map, dest)
+-- Use these setters (rather than the globals) when Pathfinder owns navigation.
+-- Its pre-route item and GameClient's per-step remount must select the same item,
+-- including when one queued route crosses from Surf onto land. Do not rewrite
+-- Static_Settings or change legacy scripts which explicitly clear setMount("").
+local function setGroundMount(mount)
+    if type(mount) ~= "string" or (mount ~= "" and not hasItem(mount))
+        or type(setMount) ~= "function" then return false end
+    if not setMount(mount) then return false end
+    settings.mount = mount
+    return true
+end
+
+local function setSurfMount(mount)
+    if type(mount) ~= "string" or (mount ~= "" and not hasItem(mount))
+        or type(setWaterMount) ~= "function" then return false end
+    -- Configuration only: the existing client owns Surf eligibility, entering
+    -- water and the authoritative mount response. Never use a water item on land.
+    return setWaterMount(mount)
+end
+
+local function useMount()
+    if type(settings.mount) ~= "string" or settings.mount == "" then return false end
+    return Lib.useMount(settings.mount)
+end
+
+local function moveTo(map, dest, options)
 	if not dest then
 		dest = map
 		map = getMapName()
 	end
 	refreshTransportAvailability()
+	local policy=type(options)=="table" and
+		(tostring(options.requireActionable==true)..":"..tostring(options.preferTransport==true)
+		..":"..tostring(options.digFallback==true)) or "false:false:false"
 	playerNode = getPlayerNode(map)
 	dest = mapsToNodes(dest)
-	if Lib.useMount(settings.mount) then
+	if useMount() then
 		return true
 	elseif checkOutlet() then
 		return true
 	elseif Work.isWorking(map, settings.workOpts) then
 
 		return true
-	elseif destStore == table.concat(dest, " | ") then
+	elseif destStore == table.concat(dest, " | ") and routePolicyStore==policy then
 		return moveWithCalcPath()
 	else
+		digFallbackActive=type(options)=="table" and options.digFallback==true
 		settings.abilitiesIndex = validateAbilitiesIndex(settings.abilitiesIndex, moveAbilities)
 		settings.accountItems = validateItems(settings.accountItems, moveItems)
-		pathSolution = getTravelPath(playerNode, dest)
-		destStore = table.concat(dest, " | ")
-		if not pathSolution then return findSettings(dest) end
+		local requestedDestination = table.concat(dest, " | ")
+		local routeCost = nil
+		pathSolution, routeCost = getRequestedTravelPath(playerNode, dest, options)
+		if not pathSolution then
+			local exploring = cellCrawl.moveToFrontier(playerNode, nil,
+				requestedDestination)
+			if exploring then
+				-- Keep destStore different so the newly learned graph edge causes a
+				-- complete route recalculation on the next Lua path tick.
+				destStore = ""
+				routePolicyStore = ""
+				studioPathfinder("Exploring", requestedDestination, "",
+					"Moving to frontier", "No graph route with current links")
+				return true
+			end
+			destStore = requestedDestination
+			routePolicyStore = policy
+			studioPathfinder("Failed", destStore, "", "No route", "Path not found")
+			studioTrace("ERROR", "Pathfinder route not found: " .. destStore)
+			return findSettings(dest)
+		end
+		destStore = requestedDestination
+		routePolicyStore = policy
+		lastProgressLog,lastCheckpointLog = nil,nil
+		routeLength = #pathSolution
+		Lib.log1time("Pathfinder diagnostic: destination=" .. destStore
+			.. "; " .. tostring(cellCrawl.getKnowledgeSummary())
+			.. "; routeResult=found; routeNodes=" .. tostring(routeLength)
+			.. "; routeCost=" .. tostring(routeCost or "unknown")
+			.. (type(options)=="table" and options.preferTransport==true and "; transportPolicy=prefer" or "") .. ".")
+		studioPathfinder("Routing", destStore, tostring(playerNode),
+			"0 / " .. tostring(math.max(1, routeLength - 1)) .. " map edges", "")
+		studioTrace("ROUTE START", tostring(playerNode) .. " -> " .. destStore)
 		buildWalkingCheckpoints(pathSolution)
 		log("Path: " .. table.concat(pathSolution,"->"))
 		if settings.transportAvailable.subway == false
@@ -840,11 +1200,11 @@ local function moveTo(map, dest)
 	return false
 end
 
-local function getPath(start, dest)
+local function getPath(start, dest, options)
 	refreshTransportAvailability()
     settings.abilitiesIndex = validateAbilitiesIndex(settings.abilitiesIndex, moveAbilities)
     settings.accountItems = validateItems(settings.accountItems, moveItems)
-    return getTravelPath(start, mapsToNodes(dest))
+    return getRequestedTravelPath(canonicalMapName(start), mapsToNodes(dest),options)
 end
 
 
@@ -1041,6 +1401,11 @@ end
 ------------------------
 local pfData     = {
 resetPath        = resetPath,
+skipUnavailableDigway = function(reason)
+    if not digFallbackActive or not exceptionExist(digways,from,toMap) then return false end
+    skipUnavailableDigway(from,toMap,reason)
+    return true
+end,
 enableDigPath    = enableDigPath,
 disableDigPath   = disableDigPath,
 isDigPathEnabled = isDigPathEnabled,
@@ -1075,7 +1440,11 @@ end
 
 -- load map and settings
 local function onPathfinderStart()
-    globalMap = assert(_globalMap(), "Pathfinder --> Error : failed to load map")
+    blockedDigways={}
+    digFallbackActive=false
+    local graph,regions = _globalMap()
+    globalMap = assert(graph, "Pathfinder --> Error : failed to load map")
+    mapRegions = regions or {}
     local ss = assert(_ss(), "Pathfinder --> Error : failed to load settings")
     npcExceptions = _npcExceptions()
     cellCrawl.attachPathfinder(globalMap, getMapNode)
@@ -1085,6 +1454,7 @@ end
 -- reset path on stop
 local function onPathfinderStop()
     resetPath()
+    blockedDigways={}
 end
 
 registerHook("onStart", onPathfinderStart)
@@ -1095,7 +1465,14 @@ registerHook("onStop", onPathfinderStop)
 -- return table for users
 return {
 	moveTo = moveTo,
+    setMount = setGroundMount,
+    setWaterMount = setSurfMount,
+    useMount = useMount,
     getMapNode = getMapNode,
+    getRegion = function(node)
+        node=canonicalMapName(node or getMapName())
+        return mapRegions[node] or mapRegions[node:gsub("_%u$", "")]
+    end,
     isSameMap = isSameMap,
 	getPath = getPath,
 	enableDigPath = enableDigPath,

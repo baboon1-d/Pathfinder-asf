@@ -3,6 +3,62 @@
 Chỉ ghi các thay đổi có trong repo này. Nền thư viện vẫn mang version 2.6.5;
 ngày bên dưới là ngày publish, không phải version mới của client.
 
+## 2026-10-12
+
+### DigRework và policy di chuyển
+
+- Thêm `digrework.lua` + `Lib/ActiveHarvestRoute.lua`: thu gom Dig/PokeStop/Berry
+  chung tuyến, không Excavation; lịch Kanto → Johto → Hoenn → Sinnoh.
+- Giữ đích ổn định, lưu kiến thức node đã kiểm tra và hoãn điểm lỗi mà không
+  ghi DONE. Không quay lại vùng đã kết thúc chỉ vì timer skip ngắn hết hạn.
+- Thêm `getRegion` từ nguồn graph authored; giữ định dạng ba file tiến trình
+  và cooldown. Không kèm file trạng thái hay tài khoản thật.
+- Policy opt-in `preferTransport`: ưu tiên Subway/Transmat được bật cho hành
+  trình tới đích cố định, kể cả cost cao hơn đi bộ; không tạo vòng ga cho công
+  việc local. Không thay trọng số, không vượt `USE_SUBWAY`/`USE_TELEPORT`.
+- Policy opt-in `digFallback`: skip cạnh Dig một chiều khi tương tác không
+  khả dụng hoặc outlet từ chối đã biết; yield rồi tính lại tới cùng đích.
+  Giữ các cạnh Dig khác, không ép cửa ngược và không ghi DONE giả.
+- `requireActionable` cho phép tour bỏ cạnh thiếu checkpoint/handler trước
+  khi đi xa. Preview/dispatch dùng cùng policy, cache phân biệt các options.
+
+### Helper/map đi kèm
+
+- Đồng bộ module điều hướng đang hoạt động và dialog solver từ workspace
+  chính. Giữ **graph-cost-only** và **CellCrawl tắt**; không chép đè module
+  discovery đang không dùng, dữ liệu Excavation hoặc database spawn trên remote.
+- Alias Meteor Falls 1F 1R giữ subnode; sửa snapshot inventory restriction
+  tránh mất Bicycle ở các lần tính tuyến xen kẽ.
+- Dùng checkpoint LinkExceptions khi thiếu MapLink, giảm spam progress/
+  checkpoint bằng các kênh chống lặp độc lập.
+- Export `setMount`, `setWaterMount`, `useMount`; tái sử dụng API host,
+  không tự dùng water mount trên đất hoặc sửa hành vi Surf của client.
+- Route 16 Stop House: sửa hướng cửa A/B. Mt. Mortar 1F: gán NPC DigSpot
+  `(57,36)` vào C, không sửa collider/walkability.
+- Giữ Daily/Floaroma đã publish và Settings **default-only**. Bổ sung README,
+  ignore file tiến trình harvest và backup JSON. Không kèm script cá nhân khác.
+
+### Xác minh
+
+- MoonSharp syntax: **51/51 file Lua PASS**, kiểm tra chính clone publish.
+- **9 regression PASS**: Dig travel fallback, transport preference, combined
+  harvest, region schedule, actionable routes, navigation log, Meteor alias,
+  Daily Solaceon và Floaroma Meadow (bao gồm cache check).
+- Mount API smoke PASS: Surf/shore, một action/frame, 1000 mounted ticks,
+  cấu hình lỗi/disable/restart. Map smoke PASS: Route 16 B → Stop House → A →
+  house và lookup NPC Mt. Mortar `(57,36)`; movement/server được giả lập.
+- Real graph Cinnabar → Maze: tuyến cost thường **7.4**, tuyến policy dịch vụ
+  **8.3** qua Fuchsia/Pewter Subway; Forest → Maze vẫn trực tiếp cost **1**.
+  Route 3 → Route 4: Dig bị từ chối chuyển từ cost **1** sang đường bộ **6.7**,
+  giữ cùng đích. Đây là graph cost, không phải thời gian đo trên server.
+- 1000 cached dispatch ticks không lặp planning/log/DONE; phép đo offline lần
+  publish: **104 ms CPU** tổng, preferred cold query **475 ms CPU**. Không phải
+  latency hoặc benchmark UI/live.
+- Source host **WPF Debug/Release** và **Avalonia Desktop Debug/Release** build
+  PASS trong output riêng; không sửa source host để publish bundle.
+- **Chưa xác nhận live sau publish**. Không thay Core, protocol, crypto, auth,
+  Lua API host, battle hoặc thuật toán tìm đường theo ô của client.
+
 ## 2026-10-10
 
 ### Cập nhật Daily Solaceon và Floaroma Meadow

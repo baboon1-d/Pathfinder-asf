@@ -21,6 +21,20 @@ local LinkMap  = _LinkMap()
 local EventMap = _EventMap()
 
 local GlobalMap = {}
+-- Region ownership comes from the authored source maps, not map-name guesses.
+-- LinkMap adds cross-region edges but must not reclassify their endpoints.
+local regions = {}
+local function tagRegion(map,region)
+    for node in pairs(map) do
+        if not regions[node] then regions[node]=region end
+        local physical=node:gsub("_%u$", "")
+        if not regions[physical] then regions[physical]=region end
+    end
+end
+tagRegion(KantoMap,"Kanto")
+tagRegion(JohtoMap,"Johto")
+tagRegion(HoennMap,"Hoenn")
+tagRegion(SinnohMap,"Sinnoh")
 
 local function mergeMap(t1, t2)
     for key, value in pairs(t2) do
@@ -39,5 +53,5 @@ mergeMap(GlobalMap, SinnohMap)
 mergeMap(GlobalMap, LinkMap)
 mergeMap(GlobalMap, EventMap)
 
-return GlobalMap
+return GlobalMap, regions
 end

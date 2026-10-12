@@ -241,7 +241,8 @@ mapLink["Route 14_A"] = {["Route 13_A"] = {{17, 0, 23, 0}}, ["Route 15"] = {{0, 
 --mapLink["Route 14_B"] = {["Route 14_A"] = {0}}
 mapLink["Route 15 Stop House"] = {["Route 15"] = {{10, 6, 10, 7}}, ["Fuchsia City"] = {{0, 6, 0, 7}}}
 mapLink["Route 15"] = {["Route 15 Stop House"] = {{6, 16, 6, 17}}, ["Route 14_A"] = {{94, 22, 94, 31}}}
-mapLink["Route 16 Stop House"] = {["Bike Road House 1f"] = {{19, 9}}, ["Route 16_B"] = {{0, 6}}, ["Route 16_A"] = {{20, 6}}}
+-- West door reaches Route 16_A (Yorkie's house); east door returns to Celadon/B.
+mapLink["Route 16 Stop House"] = {["Bike Road House 1f"] = {{19, 9}}, ["Route 16_B"] = {{20, 6}}, ["Route 16_A"] = {{0, 6}}}
 mapLink["Route 16 house"] = {["Route 16_A"] = {{3, 9, 4, 9}}}
 mapLink["Route 16_A"] = {["Route 16 Stop House"] = {{64, 12, 64, 13}}, ["Route 16 house"] = {{31, 14}}, ["Route 17"] = {{29, 40, 33, 40}}}
 mapLink["Route 16_B"] = {["Route 16 Stop House"] = {{70, 12, 70, 13}}, ["Celadon City_A"] = {{90, 19, 90, 20}}}

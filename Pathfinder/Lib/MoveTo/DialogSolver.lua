@@ -65,6 +65,7 @@ end
 
 local function solveOutlet(message, pf)
     if string.find(message, digUndiscovered) then
+        if pf.skipUnavailableDigway and pf.skipUnavailableDigway("outlet chua mo") then return true end
         pf.disableDigPath()
         pf.setOutlet()
         pf.resetPath()

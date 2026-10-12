@@ -16,7 +16,11 @@ local MapPath       = require (cdpath .. "Lib/MoveTo/MapPath")
 return {
 	getPath = PathFinder.getPath,
 	moveTo = PathFinder.moveTo,
+    setMount = PathFinder.setMount,
+    setWaterMount = PathFinder.setWaterMount,
+    useMount = PathFinder.useMount,
 	getMapNode = PathFinder.getMapNode,
+    getRegion = PathFinder.getRegion,
 	isSameMap = PathFinder.isSameMap,
 	isDestination = PathFinder.isDestination,
 	moveToMapCell = moveToMapCell.moveToMapCell,

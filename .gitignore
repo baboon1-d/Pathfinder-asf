@@ -6,6 +6,7 @@ Log/
 dataMap/
 daily_status.txt
 bms_status.txt
+*_status.txt
 *.log
 *.pm
 *.bak
@@ -15,6 +16,7 @@ bms_status.txt
 .map-editor-backups/
 SpawnBackups/
 *.backup.lua
+*.backup.json
 __pycache__/
 *.pyc
 .vs/
