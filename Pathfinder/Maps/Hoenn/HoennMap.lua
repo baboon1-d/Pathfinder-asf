@@ -253,7 +253,7 @@ HoennMap["Route 112_C"] = {["Lavaridge Town"] = {0.5}, ["Jagged Pass_C"] = {0.5}
 HoennMap["Route 113"] = {["Fallarbor Town"] = {1.5}, ["Route 111 North"] = {1.5}}
 HoennMap["Route 114 House"] = {["Route 114"] = {1}}
 HoennMap["Route 114"] = {["Route 114 House"] = {1}, ["Fossil Maniac House"] = {1}, ["Fallarbor Town"] = {1.5}, ["Meteor falls 1F 1R_A"] = {1.5}}
-HoennMap["Route 115_A"] = {["Mineral Site_A"] = {1}, ["Meteor falls 1F 1R_X"] = {1}, ["Route 115_B"] = {0.5}, ["Route 115_C"] = {1, {["abilities"] = {"surf"}}}}
+HoennMap["Route 115_A"] = {["Mineral Site"] = {1}, ["Meteor falls 1F 1R_X"] = {1}, ["Route 115_B"] = {0.5}, ["Route 115_C"] = {1, {["abilities"] = {"surf"}}}}
 HoennMap["Route 115_B"] = {["Route 115_A"] = {0.5, {["abilities"] = {"surf"}}}, ["Rustboro City_A"] = {1}}
 HoennMap["Route 115_C"] = {["Route 115_A"] = {1.5, {["abilities"] = {"surf"}}}, ["Route 115_B"] = {1.5, {["abilities"] = {"surf"}}}, ["Route 115_E"] = {1.5, {["abilities"] = {"rock climb"}}}, ["Route 115_D"] = {1.5, {["abilities"] = {"rock smash"}}}}
 HoennMap["Route 115_D"] = {["Route 115_C"] = {0.5}, ["Meteor falls 1F 1R_C"] = {0.5}}
@@ -467,8 +467,7 @@ HoennMap["Eastern House 2"] = {["Valley Of Steel Eastern Peak"] = {1}}
 HoennMap["Eastern House 3"] = {["Valley Of Steel Eastern Peak"] = {1}}
 -------------------------------------------------Excavation-------------------------------------------------
 HoennMap["Natural Site"] = {["Route 119A"] = {1}}
-HoennMap["Mineral Site_A"] = {["Mineral Site_B"] = {1}, ["Route 115_A"] = {1}}
-HoennMap["Mineral Site_B"] = {["Mineral Site_A"] = {1}}
+HoennMap["Mineral Site"] = {["Route 115_A"] = {1}}
 HoennMap["Glacial Site"] = {["Route 103_C"] = {1}}
 HoennMap["Granite Cave 1F2"] = {["Granite Cave 1F_B"] = {1}}
 HoennMap["Granite Cave 1F_A"] = {["Granite Cave B1F_A"] = {1}, ["Route 106"] = {1}}
