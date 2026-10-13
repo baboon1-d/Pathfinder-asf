@@ -3,17 +3,19 @@
 Thư viện điều hướng Lua dựa trên Pathfinder 2.6.5, dành cho môi trường
 Basculegion/PROShine có API Lua tương thích. Repo cung cấp module, dữ liệu map
 và cấu hình dùng chung. Thư viện **không phải một script bot chạy độc lập**;
-bundle có thêm hai script tùy chọn `DailySolaceon.lua`, `digrework.lua` và helper
-đi kèm.
+bundle có thêm ba script tùy chọn `DailySolaceon.lua`, `digrework.lua`,
+`BugCatching.lua` và helper đi kèm. Bug Catching chạy độc lập, không cần Pathfinder.
 
 ## Nội dung
 
 ```text
 DailySolaceon.lua        -- Script daily tùy chọn
 digrework.lua            -- Lịch Dig + PokeStop + Berry, không Excavation
+BugCatching.lua          -- Hunt daily Bug Catching + HP IV/score + Hall PC cleanup
 Lib/
   DailySolaceonHunt.lua  -- Chọn bãi và patrol cho Daily
   ActiveHarvestRoute.lua -- Điều phối công việc và lịch vùng của DigRework
+  BugCatchingScore.lua   -- Tier/base HP, khoảng HP IV và điểm daily
 Pathfinder/
   MoveToApp.lua          -- Entry point cho script sử dụng thư viện
   Lib/                  -- Điều hướng, hội thoại và helper
@@ -24,9 +26,10 @@ Settings/
   WorkSettings.lua      -- Cấu hình công việc/berries
 README.md
 CHANGELOG.md
+BUG_CATCHING.md          -- Cấu hình hunt/PC, giới hạn và timer khi reload
 ```
 
-Ngoài hai script/helper công khai ở trên, không đưa `Script.lua`, script cá nhân,
+Ngoài ba script/helper công khai ở trên, không đưa `Script.lua`, script cá nhân,
 bản backup, log hoặc ID tài khoản vào bản phát hành.
 
 ## Cài đặt
@@ -39,6 +42,8 @@ bản backup, log hoặc ID tài khoản vào bản phát hành.
    Giữ nguyên cấu trúc; chỉ chép `MoveToApp.lua` là không đủ.
    Nếu dùng Daily, chép thêm **cả** `DailySolaceon.lua` và `Lib/DailySolaceonHunt.lua`.
    Nếu dùng DigRework, chép thêm **cả** `digrework.lua` và `Lib/ActiveHarvestRoute.lua`.
+   Nếu dùng Bug Catching, chép **cả** `BugCatching.lua` và `Lib/BugCatchingScore.lua`.
+   Bug Catching không cần hai thư mục Pathfinder/Settings.
 3. Nạp module ở đầu script, trước khi bot bắt đầu chạy.
 4. Sau khi cập nhật module/cấu hình, nạp lại script để tránh dùng module đã cache.
 
@@ -176,6 +181,26 @@ Bãi không có hai ô encounter liền kề có thể tới được sẽ bị 
 sẽ dừng có lý do. Encounter ground trong nhà là suy luận từ dữ liệu Land/cell
 type, không phải bảng spawn từng ô từ server.
 
+### Bug Catching tùy chọn
+
+Tự vào Bug Catching Area với catcher biết **False Swipe ở slot 1**, đủ bóng,
+rồi Start `BugCatching.lua`. Tier 1–2 chỉ chọn nhóm HP cao nhất theo species +
+level (wild EV HP=0); tier 3–4/shiny/form ném bóng ngay. HP cho **khoảng IV**,
+không chứng minh IV31 hoặc tổng 6 IV cao; score chính xác được đọc sau capture.
+
+Mặc định `AUTO_PC_CLEANUP=true`: có best mới/đầy đội thì ra Hall qua cửa Area
+`(36,56)`, dùng PC gần `(10,10)` rồi vào lại qua `(24,5)`. Người dùng xác nhận
+giữ nguyên lượt thi khi đi Hall; chưa có live trace mới từ bản phát hành này.
+Giữ catcher/best/shiny/form/con chưa chấm điểm; chỉ release từng party slot sau
+khi PC thật có snapshot, chờ server cập nhật party rồi mới chọn con tiếp.
+**Chỉ mang catcher và catches của lượt contest**; con thường ngoài lượt ở
+slot 2–6 có thể bị release vĩnh viễn. Không chọn Pokémon trong storage/box rows.
+
+Tắt cleanup để dùng quota fallback (2 catches thường tier 1–2, mở 3 phút cuối).
+Timer local tối đa 20 phút, không reset khi đi Hall/Stop–Start cùng Lua VM;
+**reload phải chỉnh `MINUTES_REMAINING` đúng thời gian còn lại**. Bạn tự nhận/
+check điểm/nộp bài. Xem [hướng dẫn và giới hạn đầy đủ](BUG_CATCHING.md).
+
 ### DigRework tùy chọn
 
 - Dùng chung một bộ điều phối cho `getActiveDigSpots`, `getActivePokestop` và
@@ -186,6 +211,9 @@ type, không phải bảng spawn từng ô từ server.
 - `PREFER_TRANSPORT = true`: ưu tiên Subway/Teleport khi được bật trong Settings.
   Chọn công việc vẫn dùng graph cost thường để không bỏ qua việc ngay cạnh;
   policy dịch vụ chỉ áp dụng hành trình tới đích đã chọn.
+  Chỉ ép tuyến dịch vụ nếu chi phí đi bộ access + egress giảm so với tuyến
+  thường; không vòng qua ga khác rồi quay lại thành phố/đích gần ban đầu.
+  Không yêu cầu tổng cost dịch vụ thấp hơn đi bộ và không đổi trọng số graph.
 - `FALLBACK_DIG_PATH = true`: nếu không có Dig hợp lệ, NPC không sẵn sàng,
   tương tác bị từ chối/lỗi hoặc gặp câu từ chối outlet đã biết, bỏ qua **cạnh
   Dig một chiều đó** trong RAM, nhường tick rồi tính lại tới **cùng đích**.
@@ -213,6 +241,23 @@ cần thiết của tuyến (Maze chỉ nối với Forest).
 
 ### Map/helper đồng bộ thêm
 
+- Dig chung Route 22 / Indigo Plateau / Mt. Silver chọn theo **tên đích trong
+  menu server**, không giữ index cố định: Mt. Silver Exterior có thể là option
+  1, còn option 2 là Cancel. Đọc `choices.prompt` khi message rỗng; xác nhận
+  Yes riêng rồi mới chọn outlet và slot Dig. Cần host hỗ trợ tham số choices
+  hiện có của `onDialogMessage`; thiếu menu thì báo lỗi thay vì chọn bừa.
+  Khi bật `digFallback`, đích không có trong menu được Cancel theo index đã
+  xác nhận và skip cạnh đó; giữ đích hành trình và các Dig shortcut khác.
+- Mt. Silver 1F B/C ↔ D dùng rectangle vùng đích đã có trong `SubstituteMaps`.
+  Strict route không loại nhầm đường tới Moltres Chamber vì placeholder cost;
+  giữ cửa `(21,19)`, điều kiện Rock Smash của cạnh B ↔ C và chiều quay ra khi
+  thiếu Escape Rope. Không thêm graph edge hay bỏ kiểm tra checkpoint.
+- Dig Mt. Coronet hỗ trợ menu có số thứ tự hoặc list đánh số gộp nhiều dòng;
+  chọn index thật của đích, không mặc định Summit luôn ở mục 3. Nhãn menu
+  Route 211_A=West, Route 211_B=East chỉ áp dụng đúng cạnh, không gộp node.
+  Menu thiếu/mơ hồ hoặc slot Dig sai sẽ queue Cancel đã biết hoặc non-slot 0
+  trước khi dừng để tránh host default 1. Server xử lý 0 chưa xác minh live;
+  có thể cần tự đóng dialog. Không queue party slot khi chưa nhận diện đích.
 - Alias chính xác `Meteor Falls 1F 1R` → tên graph legacy `Meteor falls 1F 1R`,
   giữ phân biệt `_A`, `_B`, ...; không đổi tên mọi map một cách mù quáng.
 - Route 16 Stop House: cửa tây `(0,6)` → A/nhà Yorkie, cửa đông `(20,6)` → B.
@@ -254,6 +299,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests/FloaromaMeadowPathfind
 `HarvestRegionScheduleRegression`, `PathfinderActionableRouteRegression`,
 `PathfinderNavigationLogRegression` và `MeteorFallsMapNameRegression` cùng cách
 truyền `-ScriptRoot` tới clone publish. Xem kết quả theo ngày trong changelog.
+
+Hotfix Dig menu/Mt. Silver được kiểm tra thêm bằng
+`DigDestinationMenuRegression` và `MtSilverBossRouteRegression` từ source host,
+vẫn trỏ `-ScriptRoot` tới chính clone publish. Chưa xác minh đi Dig/Mt. Silver
+live sau sửa. Cập nhật module rồi **Stop → Load lại script → Start** để xóa
+require cache; không cần xóa tiến trình hay mở lại outlet đã có.
+
+Đợt 2026-10-13 kiểm tra thêm `BugCatchingRegression` (calculator/policy/Hall PC
+và Lua host), `PathfinderTransportProgressRegression` và menu Dig Coronet có
+số/gộp dòng; mọi runner đều trỏ vào chính clone publish. Test PC dùng fixture
+mô phỏng, không thực hiện release live. Không kèm runner cần source host vào repo.
 
 Các runner phụ thuộc MoonSharp/Core trong source host, không được kèm như test
 standalone của repo này. Kiểm tra cache Floaroma báo SKIP nếu không có map cache.

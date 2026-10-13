@@ -3,6 +3,61 @@
 Chỉ ghi các thay đổi có trong repo này. Nền thư viện vẫn mang version 2.6.5;
 ngày bên dưới là ngày publish, không phải version mới của client.
 
+## 2026-10-13 — Bug Catching, Dig Coronet/Mt. Silver và transport progress
+
+### Bug Catching daily tùy chọn
+
+- Thêm `BugCatching.lua`, `Lib/BugCatchingScore.lua`, `BUG_CATCHING.md`:
+  False Swipe slot 1, rectangle cấu hình, HP IV trước bắt và tổng điểm sau bắt.
+  Tier 1–2 top-HP; tier 3–4/shiny/form ném bóng ngay. Không cần Pathfinder.
+- Hall PC cleanup khi best mới/đầy đội; giữ catcher/best/shiny/form/score chưa
+  biết. PC thật/snapshot/ID/slot/party-ack guards; không chọn storage rows,
+  không resend release chậm và không giả party. Người dùng xác nhận lượt thi
+  không mất khi đi Hall; bản này chưa được chạy live để xác minh lại.
+- Timer 20 phút không reset theo map/Stop–Start; reload phải nhập đúng thời gian
+  còn lại. Tắt cleanup dùng quota fallback. Không tự nhận/check/nộp contest.
+
+### Dig Coronet và ưu tiên dịch vụ
+
+- Menu Dig hỗ trợ thường/đánh số/list đánh số gộp dòng; kiểm tra index liên tục
+  và đích duy nhất, không hardcode Summit option 3. Route211_A=West, _B=East
+  qua `menuName` từng cạnh, không alias/gộp map toàn cục.
+- Thiếu/mơ hồ menu hoặc slot Dig sai queue Cancel đã biết hoặc non-slot 0 trước
+  khi dừng, tránh host default1. Server xử lý 0 chưa xác minh live.
+- Prefer-transport chỉ ép dịch vụ khi access + egress giúp giảm walking cost;
+  tránh đi vòng qua ga rồi quay lại thành phố/đích gần. Giữ service flags,
+  trọng số và ưu tiên hữu ích ngay cả khi tổng cost dịch vụ cao hơn đi bộ.
+
+### Dig menu và checkpoint Mt. Silver
+
+- Menu Dig được cung cấp có `Mt. Silver Exterior = 1`, `Cancel = 2`, khác
+  index 2 trong data cũ. Chọn theo tên đích trong choices authoritative,
+  xử lý prompt nằm trong tham số options của host và bỏ màu khi so sánh.
+- Tách xác nhận Yes khỏi menu outlet để không prequeue sai lựa chọn; giữ
+  đúng slot Dig 1..6. Đích vắng mặt chỉ Cancel theo menu đã xác nhận rồi dùng
+  fallback per-edge nếu bật, không đoán option hoặc tắt mọi Dig route.
+  Caves một outlet giữ sequence cũ; thiếu choices ở shared burrow báo lỗi rõ.
+- Bổ sung checkpoint Mt. Silver 1F B/C ↔ D từ rectangle vùng đích đã có.
+  Fuchsia → Moltres Chamber không còn bị strict query loại ở B → D;
+  giữ graph/cost, cửa chamber `(21,19)`, Rock Smash và đường quay ra.
+- Chỉ merge block Mt. Silver vào MapExceptions công khai: giữ nguyên các
+  ngoại lệ Mineral/Historical/Feral và dữ liệu khác trên remote. Không kèm
+  Boss.lua, helper BossRoute, profiles/settings cá nhân hoặc file trạng thái.
+- Kiểm tra offline trên chính clone publish; không chứng minh walkability/
+  server travel hoặc thao tác release live. Kết quả ghi ở mục xác minh bên dưới.
+
+### Xác minh bản publish 2026-10-13
+
+- **53/53 file Lua syntax PASS** trên chính clone publish.
+- **9 regression PASS**: Bug Catching (21 base HP, 67.200 tổ hợp IV/level,
+  Hall PC fixture và actual Lua host), Dig destination menu/Coronet,
+  Mt. Silver checkpoints, transport progress, Dig travel fallback,
+  DigRework transport preference, actionable routes, Daily và Floaroma.
+- WPF + Avalonia Desktop Debug/Release build PASS cho source host tương ứng;
+  package Lua được kiểm tra lại trên clone. Không thực hiện release/đi map live.
+- Không kèm Boss, accounts/profiles, file tiến trình, log, backup hoặc Settings
+  riêng. Giữ ngoại lệ Excavation/map/spawn hiện có trên remote.
+
 ## 2026-10-12
 
 ### DigRework và policy di chuyển

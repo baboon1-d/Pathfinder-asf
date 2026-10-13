@@ -107,26 +107,26 @@ digways["Route 208"] = {
 }
 
 digways["Mt. Coronet Summit_B"] = {
-    ["Route 211_B"] = {{43, 18}, {1}},
-    ["Route 211_A"] = {{43, 18}, {2}},
+    ["Route 211_B"] = {{43, 18}, {1}, menuName="Route 211 East"},
+    ["Route 211_A"] = {{43, 18}, {2}, menuName="Route 211 West"},
     ["Route 216"] = {{43, 18}, {3}},
 }
 
 digways["Route 211_B"] = {
-    ["Route 211_A"] = {{59, 23}, {1}},
+    ["Route 211_A"] = {{59, 23}, {1}, menuName="Route 211 West"},
     ["Route 216"] = {{59, 23}, {2}},
     ["Mt. Coronet Summit_B"] = {{59, 23}, {3}},
 }
 
 digways["Route 211_A"] = {
-    ["Route 211_B"] = {{37, 21}, {1}},
+    ["Route 211_B"] = {{37, 21}, {1}, menuName="Route 211 East"},
     ["Route 216"] = {{37, 21}, {2}},
     ["Mt. Coronet Summit_B"] = {{37, 21}, {3}},
 }
 
 digways["Route 216"] = {
-    ["Route 211_B"] = {{91, 20}, {1}},
-    ["Route 211_A"] = {{91, 20}, {2}},
+    ["Route 211_B"] = {{91, 20}, {1}, menuName="Route 211 East"},
+    ["Route 211_A"] = {{91, 20}, {2}, menuName="Route 211 West"},
     ["Mt. Coronet Summit_B"] = {{91, 20}, {3}},
 }
 

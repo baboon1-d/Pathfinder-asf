@@ -832,6 +832,10 @@ end
 -- service, compare authored access -> service -> egress candidates instead.
 -- Access/egress cannot use another service; rejecting repeated nodes prevents
 -- visiting a station merely to return to the same map (Forest -> Maze, etc.).
+-- Prefer a service only when its access + egress reduces walking graph cost.
+-- The service's configured weight is excluded from that progress check, so a
+-- useful trip can still beat a lower-total-cost walk without forcing a local
+-- PC -> subway -> another city -> original city/gym detour with unique nodes.
 -- Never invent a station, override a disabled service, or change graph weights.
 local function getRequestedTravelPath(startNode, targets, options)
     local strict=type(options)=="table" and options.requireActionable==true
@@ -873,7 +877,7 @@ local function getRequestedTravelPath(startNode, targets, options)
                 else p,c=getTravelPath(dest,targets,strict,true) end
                 egress[dest]={path=p,cost=c}
             end
-            if egress[dest].path then
+            if egress[dest].path and access[source].cost+egress[dest].cost<pathCost then
                 local c=access[source].cost+cost(source,dest)+egress[dest].cost
                 if not bestCost or c<bestCost then
                     local candidate,seen={},{}
@@ -1421,7 +1425,7 @@ isSubwayPath     = isSubwayPath,
 ------------------------
 
 -- we handle dialogs in DialogSolver
-local function onPathfinderDialogMessage(message)
+local function onPathfinderDialogMessage(message, choices)
 	-- Loading Pathfinder into a quest script must not make it answer unrelated
 	-- quest, evolution, HM, or transport dialogs. It owns dialogs only while a
 	-- Pathfinder route has an active edge.
@@ -1431,7 +1435,12 @@ local function onPathfinderDialogMessage(message)
     pfData.from = from
     pfData.toMap = toMap
     pfData.abilitiesIndex = settings.abilitiesIndex
-    dialogSolver.solveDialog(message, pfData)
+    -- Current host supplies selection prompts/choices in the existing second
+    -- callback argument. Keep one-argument scripts and ordinary text intact.
+    if (message==nil or message=="") and type(choices)=="table" then
+        message=type(choices.prompt)=="string" and choices.prompt or ""
+    end
+    dialogSolver.solveDialog(message, pfData, choices)
 end
 
 local function onPathfinderSystemMessage(message)

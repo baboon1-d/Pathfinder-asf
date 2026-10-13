@@ -7,6 +7,22 @@ local Lib = require (cppdpath .. "Lib/Lib")
 
 local mapExceptions = {}
 
+-- Existing Mt. Silver same-map edges used weight-only MapLink placeholders.
+-- Make their actual destination regions explicit so strict planning and
+-- movement agree. Reuse authored rectangles; do not invent doors or merge
+-- B/C (their separate direct edge still requires Rock Smash in the graph).
+local silverRegions = require(cppdpath .. "Maps/MapExceptions/SubstituteMaps")["Mt. Silver 1F"]
+mapExceptions["Mt. Silver 1F_B"] = {
+    ["Mt. Silver 1F_D"] = {silverRegions["Mt. Silver 1F_D"][1]}
+}
+mapExceptions["Mt. Silver 1F_C"] = {
+    ["Mt. Silver 1F_D"] = {silverRegions["Mt. Silver 1F_D"][1]}
+}
+mapExceptions["Mt. Silver 1F_D"] = {
+    ["Mt. Silver 1F_B"] = {silverRegions["Mt. Silver 1F_B"][1]},
+    ["Mt. Silver 1F_C"] = {silverRegions["Mt. Silver 1F_C"][1]}
+}
+
 -- Same physical map, but distinct reachable regions separated by one-way
 -- ledges. Keep A -> B actionable instead of skipping it as "same map".
 -- Never add the reverse edge: B reaches A through Route 205 / Fuego Ironworks.

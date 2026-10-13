@@ -45,10 +45,87 @@ local function solveElevator(message, n1, n2)
     end
 end
 
-local function solveDigway(n1, n2, digIndex)
+local function digChoiceText(value)
+    if type(value)~="string" then return "" end
+    return value:gsub("%[%x+%]",""):gsub("%[%-%]","")
+        :gsub("^%s+",""):gsub("%s+$",""):gsub("%s+"," "):lower()
+end
+
+-- Some menus carry numbered labels, or a whole numbered list in one choice.
+-- Keep the authoritative order/index; never substitute the old static answer.
+local function readDigChoices(choices)
+    if type(choices)~="table" or #choices==0 then return nil,"choices missing" end
+    if #choices>16 then return nil,"too many choices" end
+    local parsed, numbered = {}, nil
+    for _,choice in ipairs(choices) do
+        if type(choice)~="string" or #choice>2048 then return nil,"invalid choice" end
+        if digChoiceText(choice)=="" then return nil,"empty choice" end
+        for line in (choice:gsub("\r\n","\n"):gsub("\r","\n").."\n"):gmatch("(.-)\n") do
+            local text=digChoiceText(line)
+            if text~="" then
+                local index,label=text:match("^(%d+)[%.)]%s*(.+)$")
+                local isNumbered=index~=nil
+                if numbered~=nil and numbered~=isNumbered then return nil,"mixed menu format" end
+                numbered=isNumbered
+                if #parsed>=16 or (index and tonumber(index)~=#parsed+1) then
+                    return nil,"ambiguous menu indexes"
+                end
+                -- Plain choices must be individual entries, not an unnumbered
+                -- multiline blob whose server index mapping is unknown.
+                if not isNumbered and choice:find("[\r\n]") then return nil,"unnumbered list" end
+                parsed[#parsed+1]=label or text
+            end
+        end
+    end
+    if #parsed==0 then return nil,"empty menu" end
+    return parsed
+end
+
+local function solveDigway(n1, n2, digIndex, message, choices, pf)
     local exce = digways[n1][n2]
     local pushLog = "Pathfinder: Pushing dialog:"
     assert(exce[1] and exce[2], "PathFinder --> digway exception is missing some data. " .. n1 .. " -> " .. n2)
+    local outlets=0
+    for _ in pairs(digways[n1]) do outlets=outlets+1 end
+    if outlets>1 then
+        -- Shared burrows list only available outlets. Static answer 2 may now
+        -- mean Cancel, not Mt. Silver. Never prequeue that index at a prior
+        -- yes/no prompt or guess when the authoritative menu lacks the target.
+        if message~="Where do you want to go?" then
+            pushDialogAnswer(1)
+            return true
+        end
+        local menu,reason=readDigChoices(choices)
+        local selected,cancel,ambiguous
+        local target=digChoiceText(exce.menuName or n2:gsub("_%u$",""))
+        for i,text in ipairs(menu or {}) do
+            if text==target then
+                if selected then ambiguous=true end
+                selected=i
+            end
+            if text=="cancel" then cancel=i end
+        end
+        if not selected or ambiguous then
+            -- A fatal Lua callback alone leaves the host's default answer 1.
+            -- Queue a known Cancel, or NON-slot 0 when the mapping is unknown.
+            -- Server handling of 0 is unverified; never guess a destination.
+            pushDialogAnswer(cancel or 0)
+            if cancel and pf.skipUnavailableDigway
+                and pf.skipUnavailableDigway("outlet khong co trong menu: "..n2) then
+                return true
+            end
+            error("Pathfinder --> Cannot safely select Dig outlet "..n2..": "
+                ..(reason or (ambiguous and "ambiguous destination" or "destination absent from menu")))
+        end
+        if not (type(digIndex)=="number" and digIndex%1==0 and digIndex>=1 and digIndex<=6) then
+            pushDialogAnswer(cancel or 0)
+            error("Pathfinder --> Invalid Dig party slot")
+        end
+        pushDialogAnswer(selected)
+        pushDialogAnswer(digIndex)
+        log("Pathfinder: Dig destination selected: "..n2.."; answer="..selected)
+        return true
+    end
     for _, push in pairs(exce[2]) do
         pushDialogAnswer(push)
         pushLog = pushLog .. " " .. push
@@ -201,13 +278,13 @@ local function solveTransport(transport, message, destination)
     end
     return true
 end
-local function solveDialog(message, pf)
+local function solveDialog(message, pf, choices)
     local n1 = pf.from
     local n2 = pf.toMap
     if pf.exceptionExist(npcExceptions, n1, n2) then
         return solveNpc(message, n1, n2)
     elseif Lib.inTable(useDigway, message) and pf.exceptionExist(digways, n1, n2) and pf.isDigPathEnabled() then
-        return solveDigway(n1, n2, pf.abilitiesIndex.dig)
+        return solveDigway(n1, n2, pf.abilitiesIndex.dig, message, choices, pf)
     elseif Lib.inTable(useDive, message) then
         return solveDive(pf.abilitiesIndex.dive)
     elseif solveOutlet(message, pf) then
