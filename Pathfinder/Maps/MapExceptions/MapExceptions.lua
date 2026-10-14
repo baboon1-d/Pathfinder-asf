@@ -42,18 +42,6 @@ mapExceptions["Pinkan Island Cave_A"] = {
     ["Pinkan Island Cave_B"] = {{47, 40}}
 }
 
-mapExceptions["Mineral Site_A"] = {
-    ["Mineral Site_B"] = {{11, 15}}
-}
-
-mapExceptions["Mineral Site_B"] = {
-    ["Mineral Site_A"] = {{11, 17}}
-}
-
-mapExceptions["Mineral Site_B"] = {
-    ["Mineral Site_A"] = {{11, 17}}
-}
-
 mapExceptions["Historical Site_A"] = {
     ["Historical Site_B"] = {{2, 12}},
     ["Historical Site_C"] = {{21, 14}}
