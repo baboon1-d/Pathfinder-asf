@@ -1107,7 +1107,7 @@ mapLink["Solaceon Pokemart"] = {["Solaceon Town"] = {{5, 12, 6, 12}}}
 mapLink["Maniac Tunnel"] = {["Solaceon Town"] = {{5, 8}}, ["Route 214"] = {{104, 8}}}
 mapLink["Pokemon News Press"] = {["Solaceon Town"] = {{4, 8}}}
 mapLink["Route 209"] = {["Solaceon Town"] = {{75, 0, 81, 0}}, ["Route 209 Stop House"] = {{3, 65, 3, 66}}}
-mapLink["Route 209 Stop House"] = {["Route 209"] = {{10, 6, 10, 7}}, ["Hearthome City"] = {{3, 6, 3, 7}}}
+mapLink["Route 209 Stop House"] = {["Route 209"] = {{10, 6, 10, 7}}, ["Hearthome City"] = {{0, 6, 0, 7}}}
 
 ---Hearthome
 mapLink["Hearthome City"] = {["Hearthome Pokecenter"] = {{18, 16}}, ["Route 209 Stop House"] = {{58, 42, 58, 43}}, ["Mart Hearthome"] = {{30, 27}}, ["Amity Square Entrance 1"] = {{11, 3, 12, 3}}, ["Route 208 Stop House"] = {{5, 41, 5, 42}}, ["Hearthome City Stop House 2"]= {{10, 45, 11, 45}}}
