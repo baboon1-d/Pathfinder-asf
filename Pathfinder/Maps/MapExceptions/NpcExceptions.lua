@@ -69,7 +69,7 @@ npcExce["Goldenrod City Station_A"] = {
 npcExce["Goldenrod City Station_B"] = {
     ["Goldenrod City Station_A"] = {{9, 7}, "Yes", "Would you like to return to the Goldenrod lobby?"}
 }
-npcExce["Johto Safari Zone Lobby"] = {
+npcExce["Johto  Zone Lobby"] = {
     ["Johto Safari Entrance"] = {{21, 6}, "Yes", "Would you like to enter the safari zone for $5,000 today?"},
 }
 npcExce["Route 40"] = {
@@ -154,6 +154,9 @@ npcExce["Slateport City"] = {
 }
 npcExce["Crater Town Shore"] = {
       ["Slateport City"] = {{6, 5}, 1, "I can sail to Slateport City if you want. Since you have a transit pass, the tour will be free of charge. Are you interested?"}
+}
+npcExce["Hoenn Safari Zone Lobby"] = {
+    ["Hoenn Safari Zone Area 1"] = {{21, 6}, 1, "Hello! Welcome to the Hoenn Safari Zone! ..."},
 }
 ----------------------
 ------ SINNOH ---------
