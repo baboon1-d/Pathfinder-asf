@@ -172,7 +172,9 @@ npcExce["Fight Area"] = {
 npcExce["Sinnoh Safari Stop"] = {
       ["Sinnoh Safari Area Zone 2"] = {{6, 3}, "24 Hour Pass ($50,000)", "Hello! Welcome to the Sinnoh Safari Zone! We have some options for access today! Would you like to enter the Safari Zone?"}
 }
-
+npcExce["Hoenn Safari Zone Area 1"] = {
+    ["Hoenn Safari Zone Lobby"] = {{24, 47}, 1, "Are you sure you want to leave the Safari Zone?"},
+}
 
 ----------------------
 ---- Sevii Islands ----
